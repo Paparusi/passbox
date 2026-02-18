@@ -7,7 +7,7 @@ export const serveCommand = new Command('serve')
   .action(async (options) => {
     try {
       // Dynamic import to avoid loading MCP deps unless needed
-      const { startMcpServer } = await import('@passbox/mcp-server');
+      const { startMcpServer } = await import('@pabox/mcp-server');
 
       if (options.port) {
         printSuccess(`Starting MCP server on port ${options.port}`);

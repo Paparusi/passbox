@@ -1,4 +1,4 @@
-import type { EncryptedBlob } from '@passbox/types';
+import type { EncryptedBlob } from '@pabox/types';
 import {
   deriveMasterKey,
   generateSalt,
@@ -11,7 +11,7 @@ import {
   toBase64,
   fromBase64,
   getDefaultKdfParams,
-} from '@passbox/crypto';
+} from '@pabox/crypto';
 import { HttpClient, type ClientConfig } from './client.js';
 import { VaultsResource } from './resources/vaults.js';
 import { SecretsResource } from './resources/secrets.js';

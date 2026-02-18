@@ -28,29 +28,29 @@ jobs:
 
       - run: pnpm build
 
-      - run: pnpm --filter @passbox/crypto test
+      - run: pnpm --filter @pabox/crypto test
 
-      - name: Publish @passbox/types
-        run: pnpm --filter @passbox/types publish --access public --no-git-checks
+      - name: Publish @pabox/types
+        run: pnpm --filter @pabox/types publish --access public --no-git-checks
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
-      - name: Publish @passbox/crypto
-        run: pnpm --filter @passbox/crypto publish --access public --no-git-checks
+      - name: Publish @pabox/crypto
+        run: pnpm --filter @pabox/crypto publish --access public --no-git-checks
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
-      - name: Publish @passbox/sdk
-        run: pnpm --filter @passbox/sdk publish --access public --no-git-checks
+      - name: Publish @pabox/sdk
+        run: pnpm --filter @pabox/sdk publish --access public --no-git-checks
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
-      - name: Publish @passbox/mcp-server
-        run: pnpm --filter @passbox/mcp-server publish --access public --no-git-checks
+      - name: Publish @pabox/mcp-server
+        run: pnpm --filter @pabox/mcp-server publish --access public --no-git-checks
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
-      - name: Publish passbox CLI
-        run: pnpm --filter passbox publish --access public --no-git-checks
+      - name: Publish pabox CLI
+        run: pnpm --filter pabox publish --access public --no-git-checks
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

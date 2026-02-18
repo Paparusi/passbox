@@ -1,5 +1,5 @@
 {
-  "name": "passbox",
+  "name": "pabox",
   "version": "0.1.0",
   "description": "Zero-knowledge secrets management CLI. Securely store and access passwords, API keys, and tokens.",
   "type": "module",
@@ -47,9 +47,9 @@
     "chalk": "^5.4.0",
     "ora": "^8.2.0",
     "cli-table3": "^0.6.5",
-    "@passbox/sdk": "workspace:*",
-    "@passbox/crypto": "workspace:*",
-    "@passbox/types": "workspace:*"
+    "@pabox/sdk": "workspace:*",
+    "@pabox/crypto": "workspace:*",
+    "@pabox/types": "workspace:*"
   },
   "devDependencies": {
     "tsup": "^8.3.0",

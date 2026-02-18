@@ -1,5 +1,5 @@
 {
-  "name": "@passbox/sdk",
+  "name": "@pabox/sdk",
   "version": "0.1.0",
   "description": "TypeScript SDK for PassBox — zero-knowledge secrets management platform.",
   "type": "module",
@@ -47,8 +47,8 @@
     "clean": "rimraf dist"
   },
   "dependencies": {
-    "@passbox/crypto": "workspace:*",
-    "@passbox/types": "workspace:*"
+    "@pabox/crypto": "workspace:*",
+    "@pabox/types": "workspace:*"
   },
   "devDependencies": {
     "tsup": "^8.3.0",

@@ -20,13 +20,13 @@ importers:
 
   apps/cli:
     dependencies:
-      '@passbox/crypto':
+      '@pabox/crypto':
         specifier: workspace:*
         version: link:../../packages/crypto
-      '@passbox/sdk':
+      '@pabox/sdk':
         specifier: workspace:*
         version: link:../../packages/sdk
-      '@passbox/types':
+      '@pabox/types':
         specifier: workspace:*
         version: link:../../packages/types
       chalk:
@@ -60,7 +60,7 @@ importers:
       '@hono/node-server':
         specifier: ^1.13.0
         version: 1.19.9(hono@4.11.9)
-      '@passbox/types':
+      '@pabox/types':
         specifier: workspace:*
         version: link:../../packages/types
       '@supabase/supabase-js':
@@ -104,7 +104,7 @@ importers:
       '@noble/hashes':
         specifier: ^1.7.0
         version: 1.8.0
-      '@passbox/types':
+      '@pabox/types':
         specifier: workspace:*
         version: link:../types
     devDependencies:
@@ -126,10 +126,10 @@ importers:
       '@modelcontextprotocol/sdk':
         specifier: ^1.12.0
         version: 1.26.0(zod@3.25.76)
-      '@passbox/sdk':
+      '@pabox/sdk':
         specifier: workspace:*
         version: link:../sdk
-      '@passbox/types':
+      '@pabox/types':
         specifier: workspace:*
         version: link:../types
       zod:
@@ -151,10 +151,10 @@ importers:
 
   packages/sdk:
     dependencies:
-      '@passbox/crypto':
+      '@pabox/crypto':
         specifier: workspace:*
         version: link:../crypto
-      '@passbox/types':
+      '@pabox/types':
         specifier: workspace:*
         version: link:../types
     devDependencies:

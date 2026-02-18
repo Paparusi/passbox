@@ -1,5 +1,5 @@
 import { argon2id } from '@noble/hashes/argon2';
-import type { KeyDerivationParams } from '@passbox/types';
+import type { KeyDerivationParams } from '@pabox/types';
 import { KDF_PARAMS, KEY_SIZE } from './constants.js';
 import { randomBytes, toBase64, fromBase64 } from './utils.js';
 

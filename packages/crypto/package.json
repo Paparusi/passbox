@@ -1,5 +1,5 @@
 {
-  "name": "@passbox/crypto",
+  "name": "@pabox/crypto",
   "version": "0.1.0",
   "description": "Zero-knowledge E2E encryption library for PassBox. Argon2id + AES-256-GCM + X25519.",
   "type": "module",
@@ -44,7 +44,7 @@
     "@noble/ciphers": "^1.2.0",
     "@noble/curves": "^1.8.0",
     "@noble/hashes": "^1.7.0",
-    "@passbox/types": "workspace:*"
+    "@pabox/types": "workspace:*"
   },
   "devDependencies": {
     "tsup": "^8.3.0",

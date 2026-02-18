@@ -1,6 +1,6 @@
-import { PassBox } from '@passbox/sdk';
-import { deriveMasterKey } from '@passbox/crypto';
-import { fromBase64 } from '@passbox/crypto';
+import { PassBox } from '@pabox/sdk';
+import { deriveMasterKey } from '@pabox/crypto';
+import { fromBase64 } from '@pabox/crypto';
 import { getAuth, getServerUrl, getDefaultVault } from './config.js';
 
 /**

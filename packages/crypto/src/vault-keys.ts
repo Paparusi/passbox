@@ -1,4 +1,4 @@
-import type { EncryptedBlob } from '@passbox/types';
+import type { EncryptedBlob } from '@pabox/types';
 import { generateVaultKey } from './keys.js';
 import { encrypt, decrypt, encryptBytes, decryptBytes } from './symmetric.js';
 import { deriveSharedKey } from './asymmetric.js';

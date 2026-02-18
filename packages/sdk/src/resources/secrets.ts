@@ -1,10 +1,10 @@
 import type { HttpClient } from '../client.js';
-import type { EncryptedBlob } from '@passbox/types';
+import type { EncryptedBlob } from '@pabox/types';
 import {
   decryptVaultKey,
   encryptSecret,
   decryptSecret,
-} from '@passbox/crypto';
+} from '@pabox/crypto';
 
 export interface SecretData {
   id: string;

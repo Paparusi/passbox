@@ -5,7 +5,7 @@ import {
   deriveMasterKey,
   toBase64,
   fromBase64,
-} from '@passbox/crypto';
+} from '@pabox/crypto';
 
 export interface VaultData {
   id: string;

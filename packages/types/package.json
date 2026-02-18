@@ -1,5 +1,5 @@
 {
-  "name": "@passbox/types",
+  "name": "@pabox/types",
   "version": "0.1.0",
   "description": "Shared TypeScript types for PassBox secrets management platform.",
   "type": "module",

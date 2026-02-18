@@ -1,5 +1,5 @@
 import { gcm } from '@noble/ciphers/aes';
-import type { EncryptedBlob } from '@passbox/types';
+import type { EncryptedBlob } from '@pabox/types';
 import { AES } from './constants.js';
 import { randomBytes, toBase64, fromBase64, toBytes, fromBytes } from './utils.js';
 

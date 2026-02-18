@@ -1,5 +1,5 @@
 {
-  "name": "@passbox/mcp-server",
+  "name": "@pabox/mcp-server",
   "version": "0.1.0",
   "description": "MCP server for PassBox — let AI agents securely access secrets with credential brokering.",
   "type": "module",
@@ -49,8 +49,8 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.12.0",
-    "@passbox/sdk": "workspace:*",
-    "@passbox/types": "workspace:*",
+    "@pabox/sdk": "workspace:*",
+    "@pabox/types": "workspace:*",
     "zod": "^3.24.0"
   },
   "devDependencies": {

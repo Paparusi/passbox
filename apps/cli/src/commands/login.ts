@@ -1,6 +1,6 @@
 import { Command } from 'commander';
 import ora from 'ora';
-import { PassBox } from '@passbox/sdk';
+import { PassBox } from '@pabox/sdk';
 import { saveAuth, getServerUrl } from '../lib/config.js';
 import { printSuccess, printError } from '../lib/output.js';
 import * as readline from 'node:readline';

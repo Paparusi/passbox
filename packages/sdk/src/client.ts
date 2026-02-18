@@ -1,4 +1,4 @@
-import type { ApiResponse } from '@passbox/types';
+import type { ApiResponse } from '@pabox/types';
 
 export interface ClientConfig {
   serverUrl: string;

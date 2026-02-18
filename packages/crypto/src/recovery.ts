@@ -1,4 +1,4 @@
-import type { EncryptedBlob } from '@passbox/types';
+import type { EncryptedBlob } from '@pabox/types';
 import { generateRecoveryKey } from './keys.js';
 import { encryptBytes, decryptBytes } from './symmetric.js';
 import { toBase64, fromBase64 } from './utils.js';
