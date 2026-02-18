@@ -9,6 +9,9 @@
     <a href="https://www.npmjs.com/package/pabox"><img src="https://img.shields.io/npm/v/pabox?label=cli" alt="CLI"></a>
     <a href="https://github.com/Paparusi/passbox/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="License"></a>
   </p>
+  <p align="center">
+    <a href="https://web-ten-rust-57.vercel.app">Web Dashboard</a> · <a href="https://api-production-db62.up.railway.app/api/v1/health">API Status</a> · <a href="https://www.npmjs.com/package/pabox">npm</a>
+  </p>
 </p>
 
 ---
