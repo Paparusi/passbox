@@ -177,6 +177,47 @@ class ApiClient {
     });
   }
 
+  // OAuth: Get user encryption keys (with explicit token)
+  async getKeys(token: string) {
+    const res = await fetch(`${this.baseUrl}/auth/keys`, {
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+    });
+    if (res.status === 404) return null;
+    const data = await res.json();
+    if (!data.success) return null;
+    return data.data as {
+      publicKey: string;
+      encryptedPrivateKey: string;
+      encryptedMasterKeyRecovery: string;
+      keyDerivationSalt: string;
+      keyDerivationParams: { iterations: number; memory: number; parallelism: number };
+    };
+  }
+
+  // OAuth: Setup encryption keys for new OAuth users
+  async setupKeys(token: string, keys: {
+    publicKey: string;
+    encryptedPrivateKey: string;
+    encryptedMasterKeyRecovery: string;
+    keyDerivationSalt: string;
+    keyDerivationParams: { iterations: number; memory: number; parallelism: number };
+  }) {
+    const res = await fetch(`${this.baseUrl}/auth/setup-keys`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+      body: JSON.stringify(keys),
+    });
+    const data = await res.json();
+    if (!data.success) throw new Error(data.error?.message || 'Failed to setup keys');
+    return data.data as { orgId: string };
+  }
+
   // Recovery (public, no auth needed)
   async getRecoveryInfo(email: string) {
     const res = await fetch(`${this.baseUrl}/auth/recovery-info`, {

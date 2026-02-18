@@ -3,15 +3,9 @@ import { z } from 'zod';
 import { getSupabaseAdmin } from '../lib/supabase.js';
 import { Errors } from '../lib/errors.js';
 
-type AuthEnv = {
-  Variables: {
-    userId: string;
-  };
-};
+const authPublic = new Hono();
 
-const auth = new Hono<AuthEnv>();
-
-// ─── Register ──────────────────────────────────────
+// ─── Shared Schema ────────────────────────────────
 const passwordSchema = z.string()
   .min(8, 'Password must be at least 8 characters')
   .max(128, 'Password must be at most 128 characters')
@@ -19,6 +13,7 @@ const passwordSchema = z.string()
   .refine(p => /[A-Z]/.test(p), 'Password must contain an uppercase letter')
   .refine(p => /[0-9]/.test(p), 'Password must contain a number');
 
+// ─── Register ──────────────────────────────────────
 const registerSchema = z.object({
   email: z.string().email().max(320),
   password: passwordSchema,
@@ -33,7 +28,7 @@ const registerSchema = z.object({
   }),
 });
 
-auth.post('/register', async (c) => {
+authPublic.post('/register', async (c) => {
   const body = await c.req.json();
   const data = registerSchema.parse(body);
   const supabase = getSupabaseAdmin();
@@ -108,7 +103,7 @@ const loginSchema = z.object({
   password: z.string().min(1).max(128),
 });
 
-auth.post('/login', async (c) => {
+authPublic.post('/login', async (c) => {
   const body = await c.req.json();
   const data = loginSchema.parse(body);
   const supabase = getSupabaseAdmin();
@@ -153,7 +148,7 @@ auth.post('/login', async (c) => {
 });
 
 // ─── Refresh Token ─────────────────────────────────
-auth.post('/refresh', async (c) => {
+authPublic.post('/refresh', async (c) => {
   const { refreshToken } = await c.req.json();
   const supabase = getSupabaseAdmin();
 
@@ -175,138 +170,20 @@ auth.post('/refresh', async (c) => {
   });
 });
 
-// ─── Service Token (Create) ────────────────────────
-const createTokenSchema = z.object({
-  name: z.string().min(1).max(100),
-  vaultIds: z.array(z.string().uuid()).max(50).optional(),
-  permissions: z.array(z.enum(['read', 'write', 'list', 'delete'])),
-  expiresAt: z.string().max(100).optional(),
-  encryptedMasterKey: z.string().max(10_000),
-});
-
-auth.post('/service-token', async (c) => {
-  const userId = c.get('userId');
-  const body = await c.req.json();
-  const data = createTokenSchema.parse(body);
-  const supabase = getSupabaseAdmin();
-
-  // Generate token
-  const tokenBytes = new Uint8Array(32);
-  crypto.getRandomValues(tokenBytes);
-  const rawToken = 'pb_' + Array.from(tokenBytes)
-    .map(b => b.toString(16).padStart(2, '0'))
-    .join('');
-
-  // Hash for storage
-  const hashBuffer = await crypto.subtle.digest(
-    'SHA-256',
-    new TextEncoder().encode(rawToken),
-  );
-  const tokenHash = Array.from(new Uint8Array(hashBuffer))
-    .map(b => b.toString(16).padStart(2, '0'))
-    .join('');
-
-  // Get user's org
-  const { data: membership } = await supabase
-    .from('org_members')
-    .select('org_id')
-    .eq('user_id', userId)
-    .limit(1)
-    .single();
-
-  const { data: tokenRecord, error } = await supabase
-    .from('service_tokens')
-    .insert({
-      name: data.name,
-      token_hash: tokenHash,
-      token_prefix: rawToken.slice(0, 11),
-      user_id: userId,
-      org_id: membership?.org_id,
-      vault_ids: data.vaultIds || [],
-      permissions: data.permissions,
-      encrypted_master_key: data.encryptedMasterKey,
-      expires_at: data.expiresAt || null,
-    })
-    .select()
-    .single();
-
-  if (error) {
-    throw Errors.internal(error.message);
-  }
-
-  return c.json({
-    success: true,
-    data: {
-      token: rawToken, // Only shown once
-      serviceToken: tokenRecord,
-    },
-  }, 201);
-});
-
-// ─── Service Token (Delete) ────────────────────────
-auth.delete('/service-token/:id', async (c) => {
-  const userId = c.get('userId');
-  const tokenId = c.req.param('id');
-  const supabase = getSupabaseAdmin();
-
-  const { error } = await supabase
-    .from('service_tokens')
-    .delete()
-    .eq('id', tokenId)
-    .eq('user_id', userId);
-
-  if (error) {
-    throw Errors.notFound('Service token');
-  }
-
-  return c.json({ success: true });
-});
-
-// ─── Get User Keys ─────────────────────────────────
-auth.get('/keys', async (c) => {
-  const userId = c.get('userId');
-  const supabase = getSupabaseAdmin();
-
-  const { data: keys, error } = await supabase
-    .from('user_keys')
-    .select('*')
-    .eq('user_id', userId)
-    .single();
-
-  if (error || !keys) {
-    throw Errors.notFound('User keys');
-  }
-
-  return c.json({
-    success: true,
-    data: {
-      publicKey: keys.public_key,
-      encryptedPrivateKey: keys.encrypted_private_key,
-      encryptedMasterKeyRecovery: keys.encrypted_master_key_recovery,
-      keyDerivationSalt: keys.key_derivation_salt,
-      keyDerivationParams: keys.key_derivation_params,
-    },
-  });
-});
-
 // ─── Recovery Info (Public) ───────────────────────
-// Returns encrypted recovery data so the client can attempt recovery.
-// The encrypted blobs are useless without the recovery key (zero-knowledge).
 const recoveryInfoSchema = z.object({
   email: z.string().email().max(320),
 });
 
-auth.post('/recovery-info', async (c) => {
+authPublic.post('/recovery-info', async (c) => {
   const body = await c.req.json();
   const data = recoveryInfoSchema.parse(body);
   const supabase = getSupabaseAdmin();
 
-  // Look up user by email
   const { data: users } = await supabase.auth.admin.listUsers();
   const user = users?.users?.find(u => u.email === data.email);
 
   if (!user) {
-    // Generic error to prevent user enumeration
     throw Errors.badRequest('Recovery failed. Please check your email and try again.');
   }
 
@@ -331,8 +208,6 @@ auth.post('/recovery-info', async (c) => {
 });
 
 // ─── Recover Account (Public) ─────────────────────
-// After client decrypts master key with recovery key, re-encrypts everything
-// with new password and submits here.
 const recoverSchema = z.object({
   email: z.string().email().max(320),
   newPassword: passwordSchema,
@@ -346,12 +221,11 @@ const recoverSchema = z.object({
   }),
 });
 
-auth.post('/recover', async (c) => {
+authPublic.post('/recover', async (c) => {
   const body = await c.req.json();
   const data = recoverSchema.parse(body);
   const supabase = getSupabaseAdmin();
 
-  // Find user
   const { data: users } = await supabase.auth.admin.listUsers();
   const user = users?.users?.find(u => u.email === data.email);
 
@@ -359,7 +233,6 @@ auth.post('/recover', async (c) => {
     throw Errors.badRequest('Recovery failed. Please check your details and try again.');
   }
 
-  // Update Supabase Auth password
   const { error: updateError } = await supabase.auth.admin.updateUserById(user.id, {
     password: data.newPassword,
   });
@@ -368,7 +241,6 @@ auth.post('/recover', async (c) => {
     throw Errors.internal('Failed to update password');
   }
 
-  // Update user keys with new encryption
   const { error: keysError } = await supabase
     .from('user_keys')
     .update({
@@ -390,4 +262,4 @@ auth.post('/recover', async (c) => {
   });
 });
 
-export { auth };
+export { authPublic };

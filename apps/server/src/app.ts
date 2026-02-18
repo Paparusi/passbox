@@ -7,7 +7,8 @@ import { authMiddleware } from './middleware/auth.js';
 import { auditMiddleware } from './middleware/audit.js';
 import { authRateLimit, apiRateLimit, waitlistRateLimit } from './middleware/rate-limit.js';
 import { health } from './routes/health.js';
-import { auth } from './routes/auth.js';
+import { authPublic } from './routes/auth-public.js';
+import { authProtected } from './routes/auth-protected.js';
 import { vaults } from './routes/vaults.js';
 import { secrets } from './routes/secrets.js';
 import { sharing } from './routes/sharing.js';
@@ -69,9 +70,9 @@ app.onError((err, c) => {
 // ─── Public Routes ─────────────────────────────────
 app.route('/api/v1/health', health);
 
-// ─── Auth Routes (rate limited: 5 req/min) ─────────
+// ─── Public Auth Routes (rate limited: 5 req/min) ──
 app.use('/api/v1/auth/*', authRateLimit);
-app.route('/api/v1/auth', auth);
+app.route('/api/v1/auth', authPublic);
 
 // ─── Public: Waitlist (rate limited: 10 req/min) ───
 app.use('/api/v1/waitlist/*', waitlistRateLimit);
@@ -92,9 +93,7 @@ protectedApp.route('/vaults', secrets);
 protectedApp.route('/vaults', sharing);
 protectedApp.route('/audit', audit);
 protectedApp.route('/billing', billing);
-
-// Service token endpoints need auth too
-protectedApp.route('/auth', auth);
+protectedApp.route('/auth', authProtected);
 
 app.route('/api/v1', protectedApp);
 
