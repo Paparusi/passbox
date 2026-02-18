@@ -110,6 +110,50 @@ class ApiClient {
   async deleteSecret(vaultId: string, name: string) {
     return this.request<any>(`/vaults/${vaultId}/secrets/${name}`, { method: 'DELETE' });
   }
+
+  async getSecretVersions(vaultId: string, name: string) {
+    return this.request<any[]>(`/vaults/${vaultId}/secrets/${encodeURIComponent(name)}/versions`);
+  }
+
+  // Sharing
+  async getVaultMembers(vaultId: string) {
+    return this.request<any[]>(`/vaults/${vaultId}/members`);
+  }
+
+  async addVaultMember(vaultId: string, email: string, role: string, encryptedVaultKey: string) {
+    return this.request<any>(`/vaults/${vaultId}/members`, {
+      method: 'POST',
+      body: JSON.stringify({ email, role, encryptedVaultKey }),
+    });
+  }
+
+  async updateVaultMember(vaultId: string, memberId: string, role: string) {
+    return this.request<any>(`/vaults/${vaultId}/members/${memberId}`, {
+      method: 'PUT',
+      body: JSON.stringify({ role }),
+    });
+  }
+
+  async removeVaultMember(vaultId: string, memberId: string) {
+    return this.request<any>(`/vaults/${vaultId}/members/${memberId}`, { method: 'DELETE' });
+  }
+
+  async getUserPublicKey(email: string) {
+    return this.request<{ publicKey: string }>(`/vaults/user-key/${encodeURIComponent(email)}`);
+  }
+
+  // Audit
+  async getAuditLogs(params?: { page?: number; pageSize?: number; action?: string; resourceType?: string; startDate?: string; endDate?: string }) {
+    const query = new URLSearchParams();
+    if (params?.page) query.set('page', String(params.page));
+    if (params?.pageSize) query.set('pageSize', String(params.pageSize));
+    if (params?.action) query.set('action', params.action);
+    if (params?.resourceType) query.set('resourceType', params.resourceType);
+    if (params?.startDate) query.set('startDate', params.startDate);
+    if (params?.endDate) query.set('endDate', params.endDate);
+    const qs = query.toString();
+    return this.request<{ items: any[]; total: number; page: number; pageSize: number; hasMore: boolean }>(`/audit${qs ? '?' + qs : ''}`);
+  }
 }
 
 export const api = new ApiClient();

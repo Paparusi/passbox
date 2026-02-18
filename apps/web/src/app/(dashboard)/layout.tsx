@@ -35,6 +35,7 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
 
   const navLinks = [
     { href: '/vaults', label: 'Vaults' },
+    { href: '/audit', label: 'Audit' },
     { href: '/settings', label: 'Settings' },
   ];
 

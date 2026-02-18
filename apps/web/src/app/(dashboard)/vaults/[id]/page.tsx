@@ -68,6 +68,11 @@ export default function VaultDetailPage() {
   // Delete state
   const [deleting, setDeleting] = useState<string | null>(null);
 
+  // Version history modal
+  const [versionSecret, setVersionSecret] = useState<Secret | null>(null);
+  const [versions, setVersions] = useState<any[]>([]);
+  const [loadingVersions, setLoadingVersions] = useState(false);
+
   function getVaultKey(vaultData: Vault): Uint8Array | null {
     if (vaultKeyRef.current) return vaultKeyRef.current;
     if (!masterKey || !vaultData.encryptedVaultKey) return null;
@@ -194,6 +199,19 @@ export default function VaultDetailPage() {
     }
   }
 
+  async function loadVersions(secret: Secret) {
+    setVersionSecret(secret);
+    setLoadingVersions(true);
+    try {
+      const data = await api.getSecretVersions(vaultId, secret.name);
+      setVersions(data || []);
+    } catch (err: any) {
+      toast(err.message || 'Failed to load versions', 'error');
+    } finally {
+      setLoadingVersions(false);
+    }
+  }
+
   function toggleReveal(name: string) {
     setRevealed(prev => {
       const next = new Set(prev);
@@ -255,7 +273,12 @@ export default function VaultDetailPage() {
             <p className="text-sm text-muted-foreground mt-1">{vault.description}</p>
           )}
         </div>
-        <Button onClick={() => setShowCreate(true)}>+ Add Secret</Button>
+        <div className="flex items-center gap-2">
+          <Button variant="ghost" onClick={() => router.push(`/vaults/${vaultId}/members`)}>
+            Members
+          </Button>
+          <Button onClick={() => setShowCreate(true)}>+ Add Secret</Button>
+        </div>
       </div>
 
       {/* Crypto status */}
@@ -353,6 +376,12 @@ export default function VaultDetailPage() {
                     <td className="px-4 py-3">
                       <div className="flex items-center justify-end gap-2">
                         <button
+                          onClick={() => loadVersions(secret)}
+                          className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                        >
+                          History
+                        </button>
+                        <button
                           onClick={() => {
                             setEditSecret(secret);
                             setEditValue(decodeValue(secret.encrypted_value));
@@ -408,6 +437,12 @@ export default function VaultDetailPage() {
                     className="text-xs text-muted-foreground hover:text-foreground transition-colors"
                   >
                     {copied === secret.name ? 'Copied!' : 'Copy'}
+                  </button>
+                  <button
+                    onClick={() => loadVersions(secret)}
+                    className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    History
                   </button>
                   <button
                     onClick={() => {
@@ -507,6 +542,48 @@ export default function VaultDetailPage() {
             </Button>
           </div>
         </form>
+      </Modal>
+
+      {/* Version History Modal */}
+      <Modal
+        open={!!versionSecret}
+        onClose={() => { setVersionSecret(null); setVersions([]); }}
+        title={versionSecret ? `History: ${versionSecret.name}` : 'Version History'}
+      >
+        {loadingVersions ? (
+          <div className="flex items-center justify-center py-8">
+            <div className="animate-spin h-6 w-6 border-2 border-primary border-t-transparent rounded-full" />
+          </div>
+        ) : versions.length === 0 ? (
+          <p className="text-sm text-muted-foreground text-center py-8">No version history available</p>
+        ) : (
+          <div className="space-y-3 max-h-80 overflow-y-auto">
+            {versions.map((v: any, i: number) => (
+              <div key={v.id || i} className="border border-border rounded-lg p-3 space-y-1">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium">Version {v.version}</span>
+                  <span className="text-xs text-muted-foreground">
+                    {new Date(v.created_at).toLocaleString()}
+                  </span>
+                </div>
+                <code className="text-xs text-muted-foreground font-mono block truncate">
+                  {(() => {
+                    try {
+                      const blob: EncryptedBlob = JSON.parse(v.encrypted_value);
+                      const vaultKey = vault ? getVaultKey(vault) : null;
+                      if (vaultKey && blob.tag !== 'placeholder') {
+                        return decryptSecret(blob, vaultKey);
+                      }
+                      return atob(blob.ciphertext);
+                    } catch {
+                      return '(encrypted)';
+                    }
+                  })()}
+                </code>
+              </div>
+            ))}
+          </div>
+        )}
       </Modal>
     </div>
   );
