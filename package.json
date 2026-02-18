@@ -1,0 +1,26 @@
+{
+  "name": "passbox",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Zero-knowledge secrets management platform for developers and AI agents",
+  "author": "PassBox",
+  "license": "MIT",
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=9.0.0"
+  },
+  "packageManager": "pnpm@9.15.4",
+  "scripts": {
+    "build": "turbo build",
+    "dev": "turbo dev",
+    "test": "turbo test",
+    "lint": "turbo lint",
+    "clean": "turbo clean",
+    "typecheck": "turbo typecheck"
+  },
+  "devDependencies": {
+    "@types/node": "^25.2.3",
+    "turbo": "^2.3.0",
+    "typescript": "^5.7.0"
+  }
+}

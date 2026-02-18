@@ -1,0 +1,24 @@
+FROM node:20-slim AS base
+RUN corepack enable && corepack prepare pnpm@9.15.4 --activate
+
+# Build stage
+FROM base AS builder
+WORKDIR /app
+COPY package.json pnpm-workspace.yaml pnpm-lock.yaml turbo.json ./
+COPY packages/config/ packages/config/
+COPY packages/types/ packages/types/
+COPY apps/server/ apps/server/
+RUN pnpm install --frozen-lockfile
+RUN pnpm --filter @passbox/server build
+
+# Production stage
+FROM base AS runner
+WORKDIR /app
+ENV NODE_ENV=production
+
+COPY --from=builder /app/apps/server/dist ./dist
+COPY --from=builder /app/apps/server/package.json ./
+COPY --from=builder /app/node_modules ./node_modules
+
+EXPOSE 3000
+CMD ["node", "dist/index.js"]

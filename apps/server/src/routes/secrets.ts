@@ -1,0 +1,314 @@
+import { Hono } from 'hono';
+import { z } from 'zod';
+import { getSupabaseAdmin } from '../lib/supabase.js';
+import { Errors } from '../lib/errors.js';
+
+type SecretEnv = {
+  Variables: {
+    userId: string;
+  };
+};
+
+const secrets = new Hono<SecretEnv>();
+
+const encryptedBlobSchema = z.object({
+  iv: z.string(),
+  ciphertext: z.string(),
+  tag: z.string(),
+  algorithm: z.literal('aes-256-gcm'),
+});
+
+// Helper: check vault membership and return role
+async function checkVaultAccess(supabase: any, vaultId: string, userId: string) {
+  const { data: membership } = await supabase
+    .from('vault_members')
+    .select('role')
+    .eq('vault_id', vaultId)
+    .eq('user_id', userId)
+    .single();
+
+  if (!membership) {
+    throw Errors.notFound('Vault');
+  }
+  return membership.role as string;
+}
+
+// ─── Create Secret ─────────────────────────────────
+const createSecretSchema = z.object({
+  name: z.string().min(1).max(256),
+  encryptedValue: encryptedBlobSchema,
+  description: z.string().optional(),
+  tags: z.array(z.string()).optional(),
+});
+
+secrets.post('/:vaultId/secrets', async (c) => {
+  const userId = c.get('userId');
+  const vaultId = c.req.param('vaultId');
+  const body = await c.req.json();
+  const data = createSecretSchema.parse(body);
+  const supabase = getSupabaseAdmin();
+
+  const role = await checkVaultAccess(supabase, vaultId, userId);
+  if (role === 'viewer') throw Errors.forbidden();
+
+  const { data: secret, error } = await supabase
+    .from('secrets')
+    .insert({
+      vault_id: vaultId,
+      name: data.name,
+      encrypted_value: JSON.stringify(data.encryptedValue),
+      description: data.description || null,
+      tags: data.tags || [],
+      created_by: userId,
+    })
+    .select()
+    .single();
+
+  if (error) {
+    if (error.code === '23505') {
+      throw Errors.conflict(`Secret "${data.name}" already exists in this vault`);
+    }
+    throw Errors.internal(error.message);
+  }
+
+  // Create first version
+  await supabase.from('secret_versions').insert({
+    secret_id: secret.id,
+    version: 1,
+    encrypted_value: JSON.stringify(data.encryptedValue),
+    created_by: userId,
+  });
+
+  return c.json({ success: true, data: secret }, 201);
+});
+
+// ─── List Secrets ──────────────────────────────────
+secrets.get('/:vaultId/secrets', async (c) => {
+  const userId = c.get('userId');
+  const vaultId = c.req.param('vaultId');
+  const supabase = getSupabaseAdmin();
+
+  await checkVaultAccess(supabase, vaultId, userId);
+
+  const { data: secretList } = await supabase
+    .from('secrets')
+    .select('id, name, tags, version, created_at, updated_at, encrypted_value')
+    .eq('vault_id', vaultId)
+    .order('name');
+
+  return c.json({ success: true, data: secretList || [] });
+});
+
+// ─── Get Secret by Name ────────────────────────────
+secrets.get('/:vaultId/secrets/:name', async (c) => {
+  const userId = c.get('userId');
+  const vaultId = c.req.param('vaultId');
+  const name = c.req.param('name');
+  const supabase = getSupabaseAdmin();
+
+  await checkVaultAccess(supabase, vaultId, userId);
+
+  const { data: secret } = await supabase
+    .from('secrets')
+    .select('*')
+    .eq('vault_id', vaultId)
+    .eq('name', name)
+    .single();
+
+  if (!secret) {
+    throw Errors.notFound(`Secret "${name}"`);
+  }
+
+  return c.json({ success: true, data: secret });
+});
+
+// ─── Update Secret ─────────────────────────────────
+const updateSecretSchema = z.object({
+  encryptedValue: encryptedBlobSchema,
+  description: z.string().optional(),
+  tags: z.array(z.string()).optional(),
+});
+
+secrets.put('/:vaultId/secrets/:name', async (c) => {
+  const userId = c.get('userId');
+  const vaultId = c.req.param('vaultId');
+  const name = c.req.param('name');
+  const body = await c.req.json();
+  const data = updateSecretSchema.parse(body);
+  const supabase = getSupabaseAdmin();
+
+  const role = await checkVaultAccess(supabase, vaultId, userId);
+  if (role === 'viewer') throw Errors.forbidden();
+
+  // Get current secret
+  const { data: current } = await supabase
+    .from('secrets')
+    .select('id, version')
+    .eq('vault_id', vaultId)
+    .eq('name', name)
+    .single();
+
+  if (!current) {
+    throw Errors.notFound(`Secret "${name}"`);
+  }
+
+  const newVersion = current.version + 1;
+
+  // Update secret
+  const { data: secret, error } = await supabase
+    .from('secrets')
+    .update({
+      encrypted_value: JSON.stringify(data.encryptedValue),
+      description: data.description,
+      tags: data.tags,
+      version: newVersion,
+    })
+    .eq('id', current.id)
+    .select()
+    .single();
+
+  if (error) {
+    throw Errors.internal(error.message);
+  }
+
+  // Save version history
+  await supabase.from('secret_versions').insert({
+    secret_id: current.id,
+    version: newVersion,
+    encrypted_value: JSON.stringify(data.encryptedValue),
+    created_by: userId,
+  });
+
+  return c.json({ success: true, data: secret });
+});
+
+// ─── Delete Secret ─────────────────────────────────
+secrets.delete('/:vaultId/secrets/:name', async (c) => {
+  const userId = c.get('userId');
+  const vaultId = c.req.param('vaultId');
+  const name = c.req.param('name');
+  const supabase = getSupabaseAdmin();
+
+  const role = await checkVaultAccess(supabase, vaultId, userId);
+  if (!['owner', 'admin'].includes(role)) throw Errors.forbidden();
+
+  const { error } = await supabase
+    .from('secrets')
+    .delete()
+    .eq('vault_id', vaultId)
+    .eq('name', name);
+
+  if (error) {
+    throw Errors.internal(error.message);
+  }
+
+  return c.json({ success: true });
+});
+
+// ─── Get Secret Versions ───────────────────────────
+secrets.get('/:vaultId/secrets/:name/versions', async (c) => {
+  const userId = c.get('userId');
+  const vaultId = c.req.param('vaultId');
+  const name = c.req.param('name');
+  const supabase = getSupabaseAdmin();
+
+  await checkVaultAccess(supabase, vaultId, userId);
+
+  const { data: secret } = await supabase
+    .from('secrets')
+    .select('id')
+    .eq('vault_id', vaultId)
+    .eq('name', name)
+    .single();
+
+  if (!secret) {
+    throw Errors.notFound(`Secret "${name}"`);
+  }
+
+  const { data: versions } = await supabase
+    .from('secret_versions')
+    .select('*')
+    .eq('secret_id', secret.id)
+    .order('version', { ascending: false });
+
+  return c.json({ success: true, data: versions || [] });
+});
+
+// ─── Bulk Create/Update ────────────────────────────
+const bulkSchema = z.object({
+  secrets: z.array(createSecretSchema),
+});
+
+secrets.post('/:vaultId/secrets/bulk', async (c) => {
+  const userId = c.get('userId');
+  const vaultId = c.req.param('vaultId');
+  const body = await c.req.json();
+  const data = bulkSchema.parse(body);
+  const supabase = getSupabaseAdmin();
+
+  const role = await checkVaultAccess(supabase, vaultId, userId);
+  if (role === 'viewer') throw Errors.forbidden();
+
+  const results = { created: 0, updated: 0, errors: [] as string[] };
+
+  for (const secret of data.secrets) {
+    // Check if exists
+    const { data: existing } = await supabase
+      .from('secrets')
+      .select('id, version')
+      .eq('vault_id', vaultId)
+      .eq('name', secret.name)
+      .single();
+
+    if (existing) {
+      // Update
+      const newVersion = existing.version + 1;
+      await supabase
+        .from('secrets')
+        .update({
+          encrypted_value: JSON.stringify(secret.encryptedValue),
+          version: newVersion,
+        })
+        .eq('id', existing.id);
+
+      await supabase.from('secret_versions').insert({
+        secret_id: existing.id,
+        version: newVersion,
+        encrypted_value: JSON.stringify(secret.encryptedValue),
+        created_by: userId,
+      });
+
+      results.updated++;
+    } else {
+      // Create
+      const { data: newSecret, error } = await supabase
+        .from('secrets')
+        .insert({
+          vault_id: vaultId,
+          name: secret.name,
+          encrypted_value: JSON.stringify(secret.encryptedValue),
+          description: secret.description || null,
+          tags: secret.tags || [],
+          created_by: userId,
+        })
+        .select()
+        .single();
+
+      if (error) {
+        results.errors.push(`${secret.name}: ${error.message}`);
+      } else {
+        await supabase.from('secret_versions').insert({
+          secret_id: newSecret.id,
+          version: 1,
+          encrypted_value: JSON.stringify(secret.encryptedValue),
+          created_by: userId,
+        });
+        results.created++;
+      }
+    }
+  }
+
+  return c.json({ success: true, data: results });
+});
+
+export { secrets };

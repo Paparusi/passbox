@@ -1,0 +1,30 @@
+{
+  "name": "passbox",
+  "version": "0.1.0",
+  "type": "module",
+  "bin": {
+    "passbox": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "clean": "rimraf dist"
+  },
+  "dependencies": {
+    "commander": "^13.1.0",
+    "chalk": "^5.4.0",
+    "ora": "^8.2.0",
+    "cli-table3": "^0.6.5",
+    "@passbox/sdk": "workspace:*",
+    "@passbox/crypto": "workspace:*",
+    "@passbox/types": "workspace:*"
+  },
+  "devDependencies": {
+    "tsup": "^8.3.0",
+    "typescript": "^5.7.0",
+    "vitest": "^3.0.0",
+    "rimraf": "^6.0.0"
+  }
+}
