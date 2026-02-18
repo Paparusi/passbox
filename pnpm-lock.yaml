@@ -91,15 +91,6 @@ importers:
 
   apps/web:
     dependencies:
-      '@pabox/crypto':
-        specifier: workspace:*
-        version: link:../../packages/crypto
-      '@pabox/sdk':
-        specifier: workspace:*
-        version: link:../../packages/sdk
-      '@pabox/types':
-        specifier: workspace:*
-        version: link:../../packages/types
       clsx:
         specifier: ^2.1.1
         version: 2.1.1

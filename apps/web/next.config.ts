@@ -1,7 +1,5 @@
 import type { NextConfig } from 'next';
 
-const nextConfig: NextConfig = {
-  transpilePackages: ['@pabox/sdk', '@pabox/crypto', '@pabox/types'],
-};
+const nextConfig: NextConfig = {};
 
 export default nextConfig;
