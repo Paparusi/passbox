@@ -1,7 +1,9 @@
 {
   "name": "@passbox/sdk",
   "version": "0.1.0",
+  "description": "TypeScript SDK for PassBox — zero-knowledge secrets management platform.",
   "type": "module",
+  "license": "MIT",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
@@ -9,6 +11,32 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     }
+  },
+  "files": [
+    "dist"
+  ],
+  "keywords": [
+    "passbox",
+    "secrets",
+    "sdk",
+    "encryption",
+    "zero-knowledge",
+    "vault",
+    "api-keys",
+    "passwords",
+    "tokens"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Paparusi/passbox",
+    "directory": "packages/sdk"
+  },
+  "homepage": "https://github.com/Paparusi/passbox",
+  "bugs": {
+    "url": "https://github.com/Paparusi/passbox/issues"
+  },
+  "engines": {
+    "node": ">=18"
   },
   "scripts": {
     "build": "tsup",

@@ -1,9 +1,39 @@
 {
   "name": "passbox",
   "version": "0.1.0",
+  "description": "Zero-knowledge secrets management CLI. Securely store and access passwords, API keys, and tokens.",
   "type": "module",
+  "license": "MIT",
   "bin": {
     "passbox": "./dist/index.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "keywords": [
+    "secrets",
+    "passwords",
+    "api-keys",
+    "tokens",
+    "encryption",
+    "zero-knowledge",
+    "cli",
+    "vault",
+    "env",
+    "dotenv",
+    "security"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Paparusi/passbox",
+    "directory": "apps/cli"
+  },
+  "homepage": "https://github.com/Paparusi/passbox",
+  "bugs": {
+    "url": "https://github.com/Paparusi/passbox/issues"
+  },
+  "engines": {
+    "node": ">=18"
   },
   "scripts": {
     "build": "tsup",

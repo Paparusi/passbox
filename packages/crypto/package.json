@@ -1,8 +1,9 @@
 {
   "name": "@passbox/crypto",
   "version": "0.1.0",
-  "private": true,
+  "description": "Zero-knowledge E2E encryption library for PassBox. Argon2id + AES-256-GCM + X25519.",
   "type": "module",
+  "license": "MIT",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
@@ -10,6 +11,26 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     }
+  },
+  "files": [
+    "dist"
+  ],
+  "keywords": [
+    "encryption",
+    "zero-knowledge",
+    "aes-256-gcm",
+    "argon2id",
+    "x25519",
+    "e2e",
+    "cryptography"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Paparusi/passbox",
+    "directory": "packages/crypto"
+  },
+  "engines": {
+    "node": ">=18"
   },
   "scripts": {
     "build": "tsup",

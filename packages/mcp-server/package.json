@@ -1,7 +1,9 @@
 {
   "name": "@passbox/mcp-server",
   "version": "0.1.0",
+  "description": "MCP server for PassBox — let AI agents securely access secrets with credential brokering.",
   "type": "module",
+  "license": "MIT",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "bin": {
@@ -12,6 +14,31 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     }
+  },
+  "files": [
+    "dist"
+  ],
+  "keywords": [
+    "passbox",
+    "mcp",
+    "model-context-protocol",
+    "ai-agents",
+    "secrets",
+    "credential-brokering",
+    "claude",
+    "llm"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Paparusi/passbox",
+    "directory": "packages/mcp-server"
+  },
+  "homepage": "https://github.com/Paparusi/passbox",
+  "bugs": {
+    "url": "https://github.com/Paparusi/passbox/issues"
+  },
+  "engines": {
+    "node": ">=18"
   },
   "scripts": {
     "build": "tsup",
