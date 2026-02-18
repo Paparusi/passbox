@@ -119,6 +119,13 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
               </div>
             )}
           </nav>
+          {user && user.emailVerified === false && (
+            <div className="mx-auto max-w-6xl px-4 pt-4">
+              <div className="rounded-lg bg-warning/10 border border-warning/30 p-3 text-sm text-warning">
+                Please verify your email address. Check your inbox for a confirmation link.
+              </div>
+            </div>
+          )}
           <main className="mx-auto max-w-6xl px-4 py-8">
             {children}
           </main>

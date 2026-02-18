@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 interface User {
   id: string;
   email: string;
+  emailVerified?: boolean;
 }
 
 interface AuthContext {
@@ -57,8 +58,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // Load saved session
   useEffect(() => {
-    const savedToken = localStorage.getItem('passbox_token');
-    const savedUser = localStorage.getItem('passbox_user');
+    const savedToken = sessionStorage.getItem('passbox_token');
+    const savedUser = sessionStorage.getItem('passbox_user');
     if (savedToken && savedUser) {
       setToken(savedToken);
       setUser(JSON.parse(savedUser));
@@ -92,8 +93,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [masterKeyVersion, resetIdleTimer]);
 
   const login = (newToken: string, newUser: User, newMasterKey?: Uint8Array) => {
-    localStorage.setItem('passbox_token', newToken);
-    localStorage.setItem('passbox_user', JSON.stringify(newUser));
+    sessionStorage.setItem('passbox_token', newToken);
+    sessionStorage.setItem('passbox_user', JSON.stringify(newUser));
     setToken(newToken);
     setUser(newUser);
     if (newMasterKey) {
@@ -103,8 +104,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const logout = () => {
-    localStorage.removeItem('passbox_token');
-    localStorage.removeItem('passbox_user');
+    sessionStorage.removeItem('passbox_token');
+    sessionStorage.removeItem('passbox_user');
     wipeMasterKey();
     if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
     setToken(null);

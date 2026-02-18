@@ -12,17 +12,24 @@ type AuthEnv = {
 const auth = new Hono<AuthEnv>();
 
 // ─── Register ──────────────────────────────────────
+const passwordSchema = z.string()
+  .min(8, 'Password must be at least 8 characters')
+  .max(128, 'Password must be at most 128 characters')
+  .refine(p => /[a-z]/.test(p), 'Password must contain a lowercase letter')
+  .refine(p => /[A-Z]/.test(p), 'Password must contain an uppercase letter')
+  .refine(p => /[0-9]/.test(p), 'Password must contain a number');
+
 const registerSchema = z.object({
-  email: z.string().email(),
-  password: z.string().min(8),
-  publicKey: z.string(),
-  encryptedPrivateKey: z.string(),
-  encryptedMasterKeyRecovery: z.string(),
-  keyDerivationSalt: z.string(),
+  email: z.string().email().max(320),
+  password: passwordSchema,
+  publicKey: z.string().max(10_000),
+  encryptedPrivateKey: z.string().max(10_000),
+  encryptedMasterKeyRecovery: z.string().max(10_000),
+  keyDerivationSalt: z.string().max(1_000),
   keyDerivationParams: z.object({
-    iterations: z.number(),
-    memory: z.number(),
-    parallelism: z.number(),
+    iterations: z.number().int().min(1).max(100),
+    memory: z.number().int().min(1024).max(1_048_576),
+    parallelism: z.number().int().min(1).max(16),
   }),
 });
 
@@ -97,8 +104,8 @@ auth.post('/register', async (c) => {
 
 // ─── Login ─────────────────────────────────────────
 const loginSchema = z.object({
-  email: z.string().email(),
-  password: z.string(),
+  email: z.string().email().max(320),
+  password: z.string().min(1).max(128),
 });
 
 auth.post('/login', async (c) => {
@@ -125,7 +132,11 @@ auth.post('/login', async (c) => {
   return c.json({
     success: true,
     data: {
-      user: { id: signIn.user.id, email: signIn.user.email },
+      user: {
+        id: signIn.user.id,
+        email: signIn.user.email,
+        emailVerified: !!signIn.user.email_confirmed_at,
+      },
       session: {
         accessToken: signIn.session.access_token,
         refreshToken: signIn.session.refresh_token,
@@ -166,11 +177,11 @@ auth.post('/refresh', async (c) => {
 
 // ─── Service Token (Create) ────────────────────────
 const createTokenSchema = z.object({
-  name: z.string().min(1),
-  vaultIds: z.array(z.string().uuid()).optional(),
+  name: z.string().min(1).max(100),
+  vaultIds: z.array(z.string().uuid()).max(50).optional(),
   permissions: z.array(z.enum(['read', 'write', 'list', 'delete'])),
-  expiresAt: z.string().optional(),
-  encryptedMasterKey: z.string(),
+  expiresAt: z.string().max(100).optional(),
+  encryptedMasterKey: z.string().max(10_000),
 });
 
 auth.post('/service-token', async (c) => {
@@ -275,6 +286,107 @@ auth.get('/keys', async (c) => {
       keyDerivationSalt: keys.key_derivation_salt,
       keyDerivationParams: keys.key_derivation_params,
     },
+  });
+});
+
+// ─── Recovery Info (Public) ───────────────────────
+// Returns encrypted recovery data so the client can attempt recovery.
+// The encrypted blobs are useless without the recovery key (zero-knowledge).
+const recoveryInfoSchema = z.object({
+  email: z.string().email().max(320),
+});
+
+auth.post('/recovery-info', async (c) => {
+  const body = await c.req.json();
+  const data = recoveryInfoSchema.parse(body);
+  const supabase = getSupabaseAdmin();
+
+  // Look up user by email
+  const { data: users } = await supabase.auth.admin.listUsers();
+  const user = users?.users?.find(u => u.email === data.email);
+
+  if (!user) {
+    // Generic error to prevent user enumeration
+    throw Errors.badRequest('Recovery failed. Please check your email and try again.');
+  }
+
+  const { data: keys } = await supabase
+    .from('user_keys')
+    .select('encrypted_master_key_recovery, encrypted_private_key, public_key')
+    .eq('user_id', user.id)
+    .single();
+
+  if (!keys || !keys.encrypted_master_key_recovery) {
+    throw Errors.badRequest('Recovery failed. Please check your email and try again.');
+  }
+
+  return c.json({
+    success: true,
+    data: {
+      encryptedMasterKeyRecovery: keys.encrypted_master_key_recovery,
+      encryptedPrivateKey: keys.encrypted_private_key,
+      publicKey: keys.public_key,
+    },
+  });
+});
+
+// ─── Recover Account (Public) ─────────────────────
+// After client decrypts master key with recovery key, re-encrypts everything
+// with new password and submits here.
+const recoverSchema = z.object({
+  email: z.string().email().max(320),
+  newPassword: passwordSchema,
+  encryptedPrivateKey: z.string().max(10_000),
+  encryptedMasterKeyRecovery: z.string().max(10_000),
+  keyDerivationSalt: z.string().max(1_000),
+  keyDerivationParams: z.object({
+    iterations: z.number().int().min(1).max(100),
+    memory: z.number().int().min(1024).max(1_048_576),
+    parallelism: z.number().int().min(1).max(16),
+  }),
+});
+
+auth.post('/recover', async (c) => {
+  const body = await c.req.json();
+  const data = recoverSchema.parse(body);
+  const supabase = getSupabaseAdmin();
+
+  // Find user
+  const { data: users } = await supabase.auth.admin.listUsers();
+  const user = users?.users?.find(u => u.email === data.email);
+
+  if (!user) {
+    throw Errors.badRequest('Recovery failed. Please check your details and try again.');
+  }
+
+  // Update Supabase Auth password
+  const { error: updateError } = await supabase.auth.admin.updateUserById(user.id, {
+    password: data.newPassword,
+  });
+
+  if (updateError) {
+    throw Errors.internal('Failed to update password');
+  }
+
+  // Update user keys with new encryption
+  const { error: keysError } = await supabase
+    .from('user_keys')
+    .update({
+      encrypted_private_key: data.encryptedPrivateKey,
+      encrypted_master_key_recovery: data.encryptedMasterKeyRecovery,
+      key_derivation_salt: data.keyDerivationSalt,
+      key_derivation_params: data.keyDerivationParams,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('user_id', user.id);
+
+  if (keysError) {
+    throw Errors.internal('Failed to update keys');
+  }
+
+  return c.json({
+    success: true,
+    data: { message: 'Account recovered successfully. Please log in with your new password.' },
   });
 });
 

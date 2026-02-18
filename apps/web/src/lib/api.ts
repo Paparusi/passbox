@@ -9,7 +9,7 @@ class ApiClient {
 
   private getToken(): string | null {
     if (typeof window === 'undefined') return null;
-    return localStorage.getItem('passbox_token');
+    return sessionStorage.getItem('passbox_token');
   }
 
   private async request<T>(path: string, options: RequestInit = {}): Promise<T> {
@@ -175,6 +175,40 @@ class ApiClient {
     return this.request<{ url: string }>('/billing/portal', {
       method: 'POST',
     });
+  }
+
+  // Recovery (public, no auth needed)
+  async getRecoveryInfo(email: string) {
+    const res = await fetch(`${this.baseUrl}/auth/recovery-info`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email }),
+    });
+    const data = await res.json();
+    if (!data.success) throw new Error(data.error?.message || 'Recovery info failed');
+    return data.data as {
+      encryptedMasterKeyRecovery: string;
+      encryptedPrivateKey: string;
+      publicKey: string;
+    };
+  }
+
+  async recoverAccount(params: {
+    email: string;
+    newPassword: string;
+    encryptedPrivateKey: string;
+    encryptedMasterKeyRecovery: string;
+    keyDerivationSalt: string;
+    keyDerivationParams: { iterations: number; memory: number; parallelism: number };
+  }) {
+    const res = await fetch(`${this.baseUrl}/auth/recover`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(params),
+    });
+    const data = await res.json();
+    if (!data.success) throw new Error(data.error?.message || 'Recovery failed');
+    return data.data;
   }
 
   // Waitlist (public, no auth needed)

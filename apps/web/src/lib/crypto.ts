@@ -182,3 +182,12 @@ export function createRecoveryKey(masterKey: Uint8Array): {
   const recoveryKey = toBase64(recoveryKeyBytes);
   return { recoveryKey, encryptedMasterKey };
 }
+
+/** Decrypt a master key using the recovery key */
+export function decryptMasterKeyWithRecovery(
+  encryptedMasterKey: EncryptedBlob,
+  recoveryKey: string,
+): Uint8Array {
+  const recoveryKeyBytes = fromBase64(recoveryKey);
+  return decryptBytes(encryptedMasterKey, recoveryKeyBytes);
+}
