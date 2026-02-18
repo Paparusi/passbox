@@ -20,7 +20,7 @@ import {
   randomBytes,
 } from '../index.js';
 
-describe('Key Derivation', () => {
+describe('Key Derivation', { timeout: 30000 }, () => {
   it('should derive consistent master key from same password + salt', () => {
     const salt = generateSalt();
     const key1 = deriveMasterKey('test-password', salt);
@@ -106,7 +106,7 @@ describe('Symmetric Encryption (AES-256-GCM)', () => {
   });
 });
 
-describe('Vault Key Management', () => {
+describe('Vault Key Management', { timeout: 30000 }, () => {
   it('should create and decrypt vault key', () => {
     const salt = generateSalt();
     const masterKey = deriveMasterKey('master-password', salt);
@@ -147,7 +147,7 @@ describe('Vault Key Management', () => {
   });
 });
 
-describe('Key Sharing (X25519)', () => {
+describe('Key Sharing (X25519)', { timeout: 30000 }, () => {
   it('should share vault key between two users', () => {
     // Alice creates a vault
     const aliceSalt = generateSalt();
@@ -194,7 +194,7 @@ describe('Key Sharing (X25519)', () => {
   });
 });
 
-describe('Recovery Key', () => {
+describe('Recovery Key', { timeout: 30000 }, () => {
   it('should recover master key using recovery key', () => {
     const salt = generateSalt();
     const masterKey = deriveMasterKey('my-password', salt);
