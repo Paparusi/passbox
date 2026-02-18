@@ -21,7 +21,8 @@ const app = new Hono();
 
 // ─── Global Middleware ─────────────────────────────
 const allowedOrigins = [
-  'https://web-ten-rust-57.vercel.app',
+  'https://passbox.dev',
+  'https://www.passbox.dev',
   'http://localhost:3000',
   'http://localhost:3001',
 ];

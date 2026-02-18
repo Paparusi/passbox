@@ -10,7 +10,7 @@
     <a href="https://github.com/Paparusi/passbox/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="License"></a>
   </p>
   <p align="center">
-    <a href="https://web-ten-rust-57.vercel.app">Dashboard</a> · <a href="https://api-production-db62.up.railway.app/api/v1/health">API</a> · <a href="https://www.npmjs.com/package/pabox">npm</a> · <a href="https://github.com/Paparusi/passbox/blob/main/CONTRIBUTING.md">Contributing</a>
+    <a href="https://passbox.dev">Dashboard</a> · <a href="https://api-production-db62.up.railway.app/api/v1/health">API</a> · <a href="https://www.npmjs.com/package/pabox">npm</a> · <a href="https://github.com/Paparusi/passbox/blob/main/CONTRIBUTING.md">Contributing</a>
   </p>
 </p>
 
@@ -71,7 +71,7 @@ passbox env pull
 
 ### Web Dashboard
 
-The web dashboard is live at **[web-ten-rust-57.vercel.app](https://web-ten-rust-57.vercel.app)**.
+The web dashboard is live at **[passbox.dev](https://passbox.dev)**.
 
 Features:
 - Create and manage vaults

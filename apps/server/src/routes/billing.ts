@@ -102,7 +102,7 @@ billing.post('/checkout', async (c) => {
     throw Errors.internal(`Stripe price not configured for ${plan}`);
   }
 
-  const appUrl = process.env.APP_URL || 'https://web-ten-rust-57.vercel.app';
+  const appUrl = process.env.APP_URL || 'https://passbox.dev';
 
   // Create checkout session
   const sessionRes = await fetch('https://api.stripe.com/v1/checkout/sessions', {
@@ -152,7 +152,7 @@ billing.post('/portal', async (c) => {
     throw Errors.badRequest('No billing account found');
   }
 
-  const appUrl = process.env.APP_URL || 'https://web-ten-rust-57.vercel.app';
+  const appUrl = process.env.APP_URL || 'https://passbox.dev';
 
   const portalRes = await fetch('https://api.stripe.com/v1/billing_portal/sessions', {
     method: 'POST',
