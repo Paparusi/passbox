@@ -27,4 +27,8 @@ jobs:
 
       - run: pnpm build
 
-      - run: pnpm --filter @pabox/crypto test
+      - name: Test @pabox/crypto
+        run: pnpm --filter @pabox/crypto test
+
+      - name: Test @pabox/sdk
+        run: pnpm --filter @pabox/sdk test

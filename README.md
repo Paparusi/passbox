@@ -10,7 +10,7 @@
     <a href="https://github.com/Paparusi/passbox/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="License"></a>
   </p>
   <p align="center">
-    <a href="https://web-ten-rust-57.vercel.app">Web Dashboard</a> · <a href="https://api-production-db62.up.railway.app/api/v1/health">API Status</a> · <a href="https://www.npmjs.com/package/pabox">npm</a>
+    <a href="https://web-ten-rust-57.vercel.app">Dashboard</a> · <a href="https://api-production-db62.up.railway.app/api/v1/health">API</a> · <a href="https://www.npmjs.com/package/pabox">npm</a> · <a href="https://github.com/Paparusi/passbox/blob/main/CONTRIBUTING.md">Contributing</a>
   </p>
 </p>
 
@@ -23,6 +23,7 @@ PassBox is an open-source, end-to-end encrypted secrets manager built for develo
 - **Zero-knowledge encryption** — Argon2id + AES-256-GCM + X25519. Server cannot decrypt your secrets.
 - **CLI-first** — Manage secrets from your terminal. Inject into any process with `passbox run`.
 - **AI agent native** — Built-in MCP server with credential brokering. AI agents use secrets without seeing them.
+- **Web dashboard** — Full-featured web UI for managing vaults and secrets.
 - **Developer SDK** — TypeScript SDK for programmatic access. `npm install @pabox/sdk`.
 - **Self-hostable** — Run your own instance with Docker, or use the hosted cloud.
 - **Team sharing** — Share vaults with role-based access via X25519 key exchange.
@@ -68,6 +69,17 @@ passbox env push .env
 passbox env pull
 ```
 
+### Web Dashboard
+
+The web dashboard is live at **[web-ten-rust-57.vercel.app](https://web-ten-rust-57.vercel.app)**.
+
+Features:
+- Create and manage vaults
+- Add, edit, reveal, copy, and delete secrets
+- Search and filter secrets
+- Account settings
+- Responsive design (works on mobile)
+
 ## SDK
 
 ```bash
@@ -81,6 +93,19 @@ import { PassBox } from '@pabox/sdk';
 const pb = new PassBox({
   serverUrl: 'https://api-production-db62.up.railway.app',
   token: 'pb_live_xxxxxxxxxxxx',
+});
+
+// Or register a new account (with full E2E crypto)
+const { passbox, recoveryKey } = await PassBox.register({
+  email: 'user@example.com',
+  password: 'master-password',
+});
+// Save recoveryKey — it's shown only once!
+
+// Or login with existing account
+const pb2 = await PassBox.login({
+  email: 'user@example.com',
+  password: 'master-password',
 });
 
 // Secret operations
@@ -172,9 +197,9 @@ Crypto libraries: [@noble/ciphers](https://github.com/paulmillr/noble-ciphers), 
 ```
 passbox/
 ├── apps/
-│   ├── server/          # Hono API server
+│   ├── server/          # Hono API server (Railway)
 │   ├── cli/             # CLI tool (passbox command)
-│   └── web/             # Web dashboard (coming soon)
+│   └── web/             # Next.js web dashboard (Vercel)
 ├── packages/
 │   ├── types/           # Shared TypeScript types
 │   ├── crypto/          # E2E encryption library
@@ -187,17 +212,23 @@ passbox/
 
 ## Self-Hosting
 
-### Docker
+### Docker Compose
 
 ```bash
 git clone https://github.com/Paparusi/passbox.git
-cd passbox
+cd passbox/docker
 
 # Configure environment
 cp .env.example .env
 # Edit .env with your Supabase credentials
 
-# Build and run
+# Start services
+docker compose up -d
+```
+
+### Docker (Server only)
+
+```bash
 docker build -f docker/Dockerfile.server -t passbox-server .
 docker run -p 3000:3000 --env-file .env passbox-server
 ```
@@ -254,13 +285,19 @@ Base URL: `https://api-production-db62.up.railway.app/api/v1`
 | `/health` | GET | Health check |
 | `/auth/register` | POST | Register + generate keys |
 | `/auth/login` | POST | Login + receive JWT |
+| `/auth/refresh` | POST | Refresh access token |
+| `/auth/service-token` | POST/DELETE | Service token management |
+| `/keys/me` | GET/PUT | User encryption keys |
 | `/vaults` | GET/POST | List/create vaults |
 | `/vaults/:id` | GET/PUT/DELETE | Vault CRUD |
 | `/vaults/:id/members` | GET/POST | Vault sharing |
+| `/vaults/:id/members/:uid` | PUT/DELETE | Member role management |
 | `/vaults/:vid/secrets` | GET/POST | List/create secrets |
+| `/vaults/:vid/secrets/bulk` | POST | Bulk create/update |
+| `/vaults/:vid/secrets/export` | GET | Export as .env |
 | `/vaults/:vid/secrets/:name` | GET/PUT/DELETE | Secret CRUD |
 | `/vaults/:vid/secrets/:name/versions` | GET | Version history |
-| `/audit` | GET | Audit logs |
+| `/audit` | GET | Audit logs (admin+) |
 
 ## npm Packages
 
@@ -274,27 +311,19 @@ Base URL: `https://api-production-db62.up.railway.app/api/v1`
 
 ## Contributing
 
-We welcome contributions! PassBox is MIT licensed.
+We welcome contributions! See [CONTRIBUTING.md](CONTRIBUTING.md) for setup instructions.
 
 ```bash
-# Setup
 git clone https://github.com/Paparusi/passbox.git
 cd passbox
 pnpm install
-
-# Build all packages
 pnpm build
-
-# Run tests
-pnpm --filter @pabox/crypto test
-
-# Start dev server
-pnpm --filter @pabox/server dev
+pnpm test
 ```
 
 ## Security
 
-PassBox is designed with zero-knowledge architecture. If you discover a security vulnerability, please email **security@passbox.dev** instead of opening a public issue.
+PassBox is designed with zero-knowledge architecture. If you discover a security vulnerability, please see [SECURITY.md](SECURITY.md) for our disclosure policy.
 
 ## License
 
