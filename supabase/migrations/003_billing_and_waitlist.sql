@@ -1,6 +1,6 @@
 -- Subscriptions / billing
 create table subscriptions (
-  id uuid primary key default uuid_generate_v4(),
+  id uuid primary key default gen_random_uuid(),
   user_id uuid references auth.users(id) on delete cascade unique,
   plan text not null default 'free' check (plan in ('free', 'pro', 'team', 'enterprise')),
   status text not null default 'active' check (status in ('active', 'canceled', 'past_due', 'trialing')),
@@ -24,7 +24,7 @@ create policy "users_own_subscription" on subscriptions
 
 -- Waitlist for cloud hosted version
 create table waitlist (
-  id uuid primary key default uuid_generate_v4(),
+  id uuid primary key default gen_random_uuid(),
   email text not null unique,
   source text default 'website',
   created_at timestamptz default now()
