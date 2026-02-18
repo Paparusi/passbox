@@ -1,0 +1,4 @@
+{
+  "installCommand": "cd ../.. && pnpm install --frozen-lockfile",
+  "buildCommand": "cd ../.. && pnpm --filter @pabox/types build && pnpm --filter @pabox/crypto build && pnpm --filter @pabox/sdk build && cd apps/web && next build"
+}
