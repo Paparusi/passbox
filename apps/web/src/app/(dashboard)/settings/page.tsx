@@ -4,20 +4,46 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useAuth } from '@/lib/auth';
+import { useToast } from '@/components/ui/toast';
+import { useConfirm } from '@/components/ui/confirm';
+
+function CopyBlock({ code }: { code: string }) {
+  const { toast } = useToast();
+  const [copied, setCopied] = useState(false);
+
+  async function copy() {
+    await navigator.clipboard.writeText(code);
+    setCopied(true);
+    toast('Copied to clipboard', 'success');
+    setTimeout(() => setCopied(false), 2000);
+  }
+
+  return (
+    <div className="flex items-center justify-between rounded-lg bg-muted p-3">
+      <code className="text-sm">{code}</code>
+      <button
+        onClick={copy}
+        className="text-xs text-muted-foreground hover:text-foreground transition-colors ml-3 shrink-0"
+      >
+        {copied ? 'Copied!' : 'Copy'}
+      </button>
+    </div>
+  );
+}
 
 export default function SettingsPage() {
   const { user, logout } = useAuth();
+  const { toast } = useToast();
+  const { confirm } = useConfirm();
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
   const [saving, setSaving] = useState(false);
 
   async function handlePasswordChange(e: React.FormEvent) {
     e.preventDefault();
     setError('');
-    setSuccess('');
 
     if (newPassword !== confirmPassword) {
       setError('New passwords do not match');
@@ -32,12 +58,22 @@ export default function SettingsPage() {
     setSaving(true);
     try {
       // Password change will re-encrypt all keys — not yet implemented
-      setSuccess('Password change is not yet available. Coming soon.');
+      toast('Password change is not yet available. Coming soon.', 'info');
     } catch (err: any) {
       setError(err.message || 'Failed to change password');
     } finally {
       setSaving(false);
     }
+  }
+
+  async function handleLogout() {
+    const ok = await confirm({
+      title: 'Sign Out',
+      message: 'Are you sure you want to sign out? You will need to log in again.',
+      confirmLabel: 'Sign Out',
+      destructive: true,
+    });
+    if (ok) logout();
   }
 
   return (
@@ -75,6 +111,7 @@ export default function SettingsPage() {
               type="password"
               value={currentPassword}
               onChange={(e) => setCurrentPassword(e.target.value)}
+              autoComplete="current-password"
               required
             />
             <Input
@@ -84,6 +121,7 @@ export default function SettingsPage() {
               placeholder="At least 8 characters"
               value={newPassword}
               onChange={(e) => setNewPassword(e.target.value)}
+              autoComplete="new-password"
               required
             />
             <Input
@@ -92,17 +130,13 @@ export default function SettingsPage() {
               type="password"
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
+              autoComplete="new-password"
               required
             />
 
             {error && (
-              <div className="rounded-lg bg-destructive/10 border border-destructive/20 p-3 text-sm text-destructive">
+              <div className="rounded-lg bg-destructive/10 border border-destructive/20 p-3 text-sm text-destructive" role="alert">
                 {error}
-              </div>
-            )}
-            {success && (
-              <div className="rounded-lg bg-primary/10 border border-primary/20 p-3 text-sm text-primary">
-                {success}
               </div>
             )}
 
@@ -120,12 +154,9 @@ export default function SettingsPage() {
           <p className="text-sm text-muted-foreground">
             Use the PassBox CLI or SDK to manage secrets from your terminal or code.
           </p>
-          <div className="rounded-lg bg-muted p-3">
-            <code className="text-sm">npm install -g pabox</code>
-          </div>
-          <div className="rounded-lg bg-muted p-3">
-            <code className="text-sm">passbox login</code>
-          </div>
+          <CopyBlock code="npm install -g pabox" />
+          <CopyBlock code="passbox login" />
+          <CopyBlock code="passbox vault list" />
         </div>
       </section>
 
@@ -139,7 +170,7 @@ export default function SettingsPage() {
               Clear your session and return to the login page.
             </p>
           </div>
-          <Button variant="destructive" size="sm" onClick={logout}>
+          <Button variant="destructive" size="sm" onClick={handleLogout}>
             Sign Out
           </Button>
         </div>
