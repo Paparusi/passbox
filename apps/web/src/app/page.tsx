@@ -1,6 +1,28 @@
+'use client';
+
+import { useState } from 'react';
 import Link from 'next/link';
+import { api } from '@/lib/api';
 
 export default function HomePage() {
+  const [waitlistEmail, setWaitlistEmail] = useState('');
+  const [waitlistStatus, setWaitlistStatus] = useState<'idle' | 'loading' | 'done' | 'error'>('idle');
+  const [waitlistMessage, setWaitlistMessage] = useState('');
+
+  async function handleWaitlist(e: React.FormEvent) {
+    e.preventDefault();
+    setWaitlistStatus('loading');
+    try {
+      const result = await api.joinWaitlist(waitlistEmail);
+      setWaitlistStatus('done');
+      setWaitlistMessage(result.message);
+      setWaitlistEmail('');
+    } catch (err: any) {
+      setWaitlistStatus('error');
+      setWaitlistMessage(err.message || 'Something went wrong');
+    }
+  }
+
   return (
     <div className="flex min-h-screen flex-col">
       {/* Nav */}
@@ -10,6 +32,9 @@ export default function HomePage() {
             Pass<span className="text-primary">Box</span>
           </span>
           <div className="flex items-center gap-3">
+            <Link href="/pricing" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
+              Pricing
+            </Link>
             <Link
               href="/login"
               className="text-sm text-muted-foreground hover:text-foreground transition-colors"
@@ -30,7 +55,7 @@ export default function HomePage() {
       <main className="flex-1">
         <section className="mx-auto max-w-3xl text-center px-4 pt-20 pb-16 space-y-6">
           <div className="inline-flex items-center rounded-full border border-border px-3 py-1 text-xs text-muted-foreground">
-            Open Source &middot; MIT License
+            Open Source &middot; MIT License &middot; Free Forever
           </div>
           <h1 className="text-4xl sm:text-5xl font-bold tracking-tight leading-tight">
             Secrets management for<br />
@@ -131,6 +156,107 @@ export default function HomePage() {
             </div>
           </div>
         </section>
+
+        {/* Pricing Preview */}
+        <section className="mx-auto max-w-5xl px-4 pb-20">
+          <div className="text-center mb-10">
+            <h2 className="text-3xl font-bold">Simple pricing</h2>
+            <p className="text-muted-foreground mt-2">Start free. Scale as you grow.</p>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 max-w-4xl mx-auto">
+            <div className="rounded-xl border border-border bg-card p-6 text-center space-y-3">
+              <h3 className="font-semibold">Free</h3>
+              <p className="text-3xl font-bold">$0</p>
+              <p className="text-sm text-muted-foreground">3 vaults, 50 secrets each</p>
+              <Link href="/register" className="inline-flex h-9 items-center rounded-lg border border-border px-4 text-sm font-medium hover:bg-muted transition-colors">
+                Get Started
+              </Link>
+            </div>
+            <div className="rounded-xl border border-primary bg-primary/5 p-6 text-center space-y-3 shadow-lg shadow-primary/10">
+              <h3 className="font-semibold">Pro</h3>
+              <p className="text-3xl font-bold">$12<span className="text-sm font-normal text-muted-foreground">/mo</span></p>
+              <p className="text-sm text-muted-foreground">Unlimited everything</p>
+              <Link href="/register?plan=pro" className="inline-flex h-9 items-center rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors">
+                Start Trial
+              </Link>
+            </div>
+            <div className="rounded-xl border border-border bg-card p-6 text-center space-y-3">
+              <h3 className="font-semibold">Team</h3>
+              <p className="text-3xl font-bold">$28<span className="text-sm font-normal text-muted-foreground">/mo</span></p>
+              <p className="text-sm text-muted-foreground">SSO + Advanced security</p>
+              <Link href="/pricing" className="inline-flex h-9 items-center rounded-lg border border-border px-4 text-sm font-medium hover:bg-muted transition-colors">
+                See Details
+              </Link>
+            </div>
+          </div>
+          <div className="text-center mt-6">
+            <Link href="/pricing" className="text-sm text-primary hover:underline">
+              View full comparison &rarr;
+            </Link>
+          </div>
+        </section>
+
+        {/* Waitlist / Cloud */}
+        <section className="mx-auto max-w-3xl px-4 pb-20">
+          <div className="rounded-xl border border-border bg-card p-8 text-center space-y-4">
+            <div className="inline-flex items-center rounded-full bg-primary/10 px-3 py-1 text-xs font-medium text-primary">
+              Coming Soon
+            </div>
+            <h2 className="text-2xl font-bold">PassBox Cloud</h2>
+            <p className="text-muted-foreground max-w-md mx-auto">
+              Managed hosting with zero setup. All the power of self-hosted PassBox, without the infrastructure.
+              Join the waitlist for early access.
+            </p>
+            {waitlistStatus === 'done' ? (
+              <div className="rounded-lg bg-success/10 border border-success/30 px-4 py-3 text-sm text-success">
+                {waitlistMessage}
+              </div>
+            ) : (
+              <form onSubmit={handleWaitlist} className="flex gap-2 max-w-sm mx-auto">
+                <input
+                  type="email"
+                  placeholder="you@example.com"
+                  value={waitlistEmail}
+                  onChange={(e) => setWaitlistEmail(e.target.value)}
+                  required
+                  className="flex-1 h-10 rounded-lg border border-border bg-muted px-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-colors"
+                />
+                <button
+                  type="submit"
+                  disabled={waitlistStatus === 'loading'}
+                  className="inline-flex h-10 items-center rounded-lg bg-primary px-5 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50"
+                >
+                  {waitlistStatus === 'loading' ? 'Joining...' : 'Join Waitlist'}
+                </button>
+              </form>
+            )}
+            {waitlistStatus === 'error' && (
+              <p className="text-xs text-destructive">{waitlistMessage}</p>
+            )}
+          </div>
+        </section>
+
+        {/* Social Proof */}
+        <section className="mx-auto max-w-4xl px-4 pb-20">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-center">
+            <div className="space-y-1">
+              <p className="text-2xl font-bold text-primary">MIT</p>
+              <p className="text-xs text-muted-foreground">Open Source License</p>
+            </div>
+            <div className="space-y-1">
+              <p className="text-2xl font-bold text-primary">E2E</p>
+              <p className="text-xs text-muted-foreground">Zero-Knowledge</p>
+            </div>
+            <div className="space-y-1">
+              <p className="text-2xl font-bold text-primary">5</p>
+              <p className="text-xs text-muted-foreground">npm Packages</p>
+            </div>
+            <div className="space-y-1">
+              <p className="text-2xl font-bold text-primary">41</p>
+              <p className="text-xs text-muted-foreground">Tests Passing</p>
+            </div>
+          </div>
+        </section>
       </main>
 
       {/* Footer */}
@@ -138,6 +264,9 @@ export default function HomePage() {
         <div className="mx-auto max-w-5xl flex flex-col sm:flex-row items-center justify-between gap-4 text-sm text-muted-foreground">
           <span>PassBox &middot; MIT License</span>
           <div className="flex items-center gap-6">
+            <Link href="/pricing" className="hover:text-foreground transition-colors">
+              Pricing
+            </Link>
             <a href="https://github.com/Paparusi/passbox" target="_blank" rel="noopener noreferrer" className="hover:text-foreground transition-colors">
               GitHub
             </a>

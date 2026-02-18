@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import { getSupabaseAdmin } from '../lib/supabase.js';
 import { Errors } from '../lib/errors.js';
+import { checkMemberLimit } from '../lib/plans.js';
 
 type SharingEnv = {
   Variables: {
@@ -78,6 +79,9 @@ sharing.post('/:vaultId/members', async (c) => {
   if (!targetUser) {
     throw Errors.notFound(`User with email "${data.email}"`);
   }
+
+  // Check plan limits
+  await checkMemberLimit(vaultId, userId);
 
   // Add member
   const { error } = await supabase.from('vault_members').insert({

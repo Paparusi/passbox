@@ -10,6 +10,9 @@ import { vaults } from './routes/vaults.js';
 import { secrets } from './routes/secrets.js';
 import { sharing } from './routes/sharing.js';
 import { audit } from './routes/audit.js';
+import { billing } from './routes/billing.js';
+import { webhook } from './routes/webhook.js';
+import { waitlist } from './routes/waitlist.js';
 
 const app = new Hono();
 
@@ -47,6 +50,10 @@ app.route('/api/v1/health', health);
 // ─── Auth Routes (partially public) ────────────────
 app.route('/api/v1/auth', auth);
 
+// ─── Public: Waitlist & Stripe Webhook ─────────────
+app.route('/api/v1/waitlist', waitlist);
+app.route('/api/v1/webhook', webhook);
+
 // ─── Protected Routes ──────────────────────────────
 const protectedApp = new Hono();
 protectedApp.use('*', authMiddleware);
@@ -57,6 +64,7 @@ protectedApp.route('/vaults', vaults);
 protectedApp.route('/vaults', secrets);
 protectedApp.route('/vaults', sharing);
 protectedApp.route('/audit', audit);
+protectedApp.route('/billing', billing);
 
 // Service token endpoints need auth too
 protectedApp.route('/auth', auth);

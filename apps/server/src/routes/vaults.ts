@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import { getSupabaseAdmin } from '../lib/supabase.js';
 import { Errors } from '../lib/errors.js';
+import { checkVaultLimit } from '../lib/plans.js';
 
 type VaultEnv = {
   Variables: {
@@ -25,6 +26,9 @@ vaults.post('/', async (c) => {
   const body = await c.req.json();
   const data = createVaultSchema.parse(body);
   const supabase = getSupabaseAdmin();
+
+  // Check plan limits
+  await checkVaultLimit(userId);
 
   // Get org if not provided
   let orgId = data.orgId;

@@ -154,6 +154,46 @@ class ApiClient {
     const qs = query.toString();
     return this.request<{ items: any[]; total: number; page: number; pageSize: number; hasMore: boolean }>(`/audit${qs ? '?' + qs : ''}`);
   }
+  // Billing
+  async getPlan() {
+    return this.request<{
+      plan: string;
+      limits: { maxVaults: number; maxSecretsPerVault: number; maxMembersPerVault: number; auditRetentionDays: number; maxServiceTokens: number };
+      usage: { vaults: number; serviceTokens: number };
+      subscription: any;
+    }>('/billing/plan');
+  }
+
+  async createCheckout(plan: string) {
+    return this.request<{ url: string }>('/billing/checkout', {
+      method: 'POST',
+      body: JSON.stringify({ plan }),
+    });
+  }
+
+  async createPortalSession() {
+    return this.request<{ url: string }>('/billing/portal', {
+      method: 'POST',
+    });
+  }
+
+  // Waitlist (public, no auth needed)
+  async joinWaitlist(email: string) {
+    const res = await fetch(`${this.baseUrl}/waitlist`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, source: 'website' }),
+    });
+    const data = await res.json();
+    if (!data.success) throw new Error(data.error?.message || 'Failed to join');
+    return data.data;
+  }
+
+  async getWaitlistCount() {
+    const res = await fetch(`${this.baseUrl}/waitlist/count`);
+    const data = await res.json();
+    return data.data?.count || 0;
+  }
 }
 
 export const api = new ApiClient();

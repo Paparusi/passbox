@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import { getSupabaseAdmin } from '../lib/supabase.js';
 import { Errors } from '../lib/errors.js';
+import { checkSecretLimit } from '../lib/plans.js';
 
 type SecretEnv = {
   Variables: {
@@ -50,6 +51,9 @@ secrets.post('/:vaultId/secrets', async (c) => {
 
   const role = await checkVaultAccess(supabase, vaultId, userId);
   if (role === 'viewer') throw Errors.forbidden();
+
+  // Check plan limits
+  await checkSecretLimit(vaultId, userId);
 
   const { data: secret, error } = await supabase
     .from('secrets')
