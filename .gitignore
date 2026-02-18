@@ -33,3 +33,4 @@ supabase/.branches/
 
 # Build
 .pnpm-store/
+.next/
