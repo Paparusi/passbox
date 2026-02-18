@@ -48,9 +48,9 @@ sharing.get('/:vaultId/members', async (c) => {
 
 // ─── Add Vault Member ──────────────────────────────
 const addMemberSchema = z.object({
-  email: z.string().email(),
+  email: z.string().email().max(320),
   role: z.enum(['admin', 'member', 'viewer']),
-  encryptedVaultKey: z.string(),
+  encryptedVaultKey: z.string().max(10_000),
 });
 
 sharing.post('/:vaultId/members', async (c) => {
@@ -77,7 +77,7 @@ sharing.post('/:vaultId/members', async (c) => {
   const targetUser = users.find(u => u.email === data.email);
 
   if (!targetUser) {
-    throw Errors.notFound(`User with email "${data.email}"`);
+    throw Errors.badRequest('Could not add member. Ensure the email is registered.');
   }
 
   // Check plan limits
@@ -186,7 +186,7 @@ sharing.get('/user-key/:email', async (c) => {
   const targetUser = users.find(u => u.email === email);
 
   if (!targetUser) {
-    throw Errors.notFound('User');
+    throw Errors.badRequest('User not found or has no encryption keys');
   }
 
   const { data: keys } = await supabase
@@ -196,7 +196,7 @@ sharing.get('/user-key/:email', async (c) => {
     .single();
 
   if (!keys) {
-    throw Errors.notFound('User keys');
+    throw Errors.badRequest('User not found or has no encryption keys');
   }
 
   return c.json({ success: true, data: { publicKey: keys.public_key } });

@@ -51,6 +51,29 @@ export const authMiddleware = createMiddleware<AuthEnv>(async (c, next) => {
     c.set('userId', serviceToken.user_id);
     c.set('userEmail', '');
     c.set('tokenId', serviceToken.id);
+
+    // Validate vault scope: if token is scoped to specific vaults,
+    // check that the requested vault is allowed
+    if (serviceToken.vault_ids && serviceToken.vault_ids.length > 0) {
+      const path = c.req.path;
+      const vaultMatch = path.match(/\/vaults\/([0-9a-f-]+)/);
+      if (vaultMatch) {
+        const requestedVaultId = vaultMatch[1];
+        if (!serviceToken.vault_ids.includes(requestedVaultId)) {
+          throw Errors.forbidden();
+        }
+      }
+    }
+
+    // Validate permissions
+    if (serviceToken.permissions && serviceToken.permissions.length > 0) {
+      const method = c.req.method;
+      const perms = serviceToken.permissions as string[];
+      if (method === 'GET' && !perms.includes('read')) throw Errors.forbidden();
+      if ((method === 'POST' || method === 'PUT') && !perms.includes('write')) throw Errors.forbidden();
+      if (method === 'DELETE' && !perms.includes('write')) throw Errors.forbidden();
+    }
+
     return next();
   }
 

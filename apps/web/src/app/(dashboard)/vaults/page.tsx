@@ -61,13 +61,17 @@ export default function VaultsPage() {
       }
 
       const { encryptedVaultKey } = createVaultKey(masterKey);
-      const encryptedVaultKeyStr = JSON.stringify(encryptedVaultKey);
+      // encryptedKey: stored on the vault record (vault-level key)
+      // encryptedVaultKey: stored on the vault_member record (owner's copy)
+      // Both encrypted with the owner's master key at creation time.
+      // When sharing, the vault key is re-encrypted with the target user's public key.
+      const encryptedKeyStr = JSON.stringify(encryptedVaultKey);
 
       await api.createVault(
         newName,
         newDesc,
-        encryptedVaultKeyStr,
-        encryptedVaultKeyStr
+        encryptedKeyStr,
+        encryptedKeyStr
       );
 
       setShowCreate(false);

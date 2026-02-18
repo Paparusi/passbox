@@ -15,9 +15,9 @@ const vaults = new Hono<VaultEnv>();
 // ─── Create Vault ──────────────────────────────────
 const createVaultSchema = z.object({
   name: z.string().min(1).max(100),
-  description: z.string().optional(),
-  encryptedKey: z.string(),
-  encryptedVaultKey: z.string(),
+  description: z.string().max(500).optional(),
+  encryptedKey: z.string().max(10_000),
+  encryptedVaultKey: z.string().max(10_000),
   orgId: z.string().uuid().optional(),
 });
 

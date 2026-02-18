@@ -1,9 +1,11 @@
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { logger } from 'hono/logger';
+import { secureHeaders } from 'hono/secure-headers';
 import { AppError } from './lib/errors.js';
 import { authMiddleware } from './middleware/auth.js';
 import { auditMiddleware } from './middleware/audit.js';
+import { authRateLimit, apiRateLimit, waitlistRateLimit } from './middleware/rate-limit.js';
 import { health } from './routes/health.js';
 import { auth } from './routes/auth.js';
 import { vaults } from './routes/vaults.js';
@@ -17,8 +19,28 @@ import { waitlist } from './routes/waitlist.js';
 const app = new Hono();
 
 // ─── Global Middleware ─────────────────────────────
-app.use('*', cors());
+const allowedOrigins = [
+  'https://web-ten-rust-57.vercel.app',
+  'http://localhost:3000',
+  'http://localhost:3001',
+];
+
+app.use('*', cors({
+  origin: (origin) => {
+    // Allow if origin matches or is a Vercel preview deploy
+    if (!origin) return allowedOrigins[0];
+    if (allowedOrigins.includes(origin)) return origin;
+    if (origin.endsWith('.vercel.app')) return origin;
+    return allowedOrigins[0];
+  },
+  credentials: true,
+  allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowHeaders: ['Content-Type', 'Authorization'],
+  maxAge: 86400,
+}));
+
 app.use('*', logger());
+app.use('*', secureHeaders());
 
 // ─── Error Handler ─────────────────────────────────
 app.onError((err, c) => {
@@ -47,15 +69,20 @@ app.onError((err, c) => {
 // ─── Public Routes ─────────────────────────────────
 app.route('/api/v1/health', health);
 
-// ─── Auth Routes (partially public) ────────────────
+// ─── Auth Routes (rate limited: 5 req/min) ─────────
+app.use('/api/v1/auth/*', authRateLimit);
 app.route('/api/v1/auth', auth);
 
-// ─── Public: Waitlist & Stripe Webhook ─────────────
+// ─── Public: Waitlist (rate limited: 10 req/min) ───
+app.use('/api/v1/waitlist/*', waitlistRateLimit);
 app.route('/api/v1/waitlist', waitlist);
+
+// ─── Public: Stripe Webhook (no rate limit) ────────
 app.route('/api/v1/webhook', webhook);
 
-// ─── Protected Routes ──────────────────────────────
+// ─── Protected Routes (rate limited: 60 req/min) ───
 const protectedApp = new Hono();
+protectedApp.use('*', apiRateLimit);
 protectedApp.use('*', authMiddleware);
 protectedApp.use('*', auditMiddleware);
 

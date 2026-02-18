@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
+import { createContext, useContext, useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 
 interface User {
@@ -26,14 +26,36 @@ const AuthContext = createContext<AuthContext>({
   logout: () => {},
 });
 
+const IDLE_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const masterKeyRef = useRef<Uint8Array | null>(null);
   const [masterKeyVersion, setMasterKeyVersion] = useState(0);
+  const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const router = useRouter();
 
+  // Wipe master key from memory (zero-fill then null)
+  const wipeMasterKey = useCallback(() => {
+    if (masterKeyRef.current) {
+      masterKeyRef.current.fill(0);
+      masterKeyRef.current = null;
+      setMasterKeyVersion(v => v + 1);
+    }
+  }, []);
+
+  // Reset idle timer on user activity
+  const resetIdleTimer = useCallback(() => {
+    if (!masterKeyRef.current) return;
+    if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
+    idleTimerRef.current = setTimeout(() => {
+      wipeMasterKey();
+    }, IDLE_TIMEOUT_MS);
+  }, [wipeMasterKey]);
+
+  // Load saved session
   useEffect(() => {
     const savedToken = localStorage.getItem('passbox_token');
     const savedUser = localStorage.getItem('passbox_user');
@@ -43,6 +65,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     setLoading(false);
   }, []);
+
+  // beforeunload: wipe master key when tab closes
+  useEffect(() => {
+    const handleUnload = () => {
+      wipeMasterKey();
+    };
+    window.addEventListener('beforeunload', handleUnload);
+    return () => window.removeEventListener('beforeunload', handleUnload);
+  }, [wipeMasterKey]);
+
+  // Idle timeout: wipe master key after 30 min of no activity
+  useEffect(() => {
+    if (!masterKeyRef.current) return;
+
+    const events = ['mousedown', 'keydown', 'scroll', 'touchstart'];
+    const handler = () => resetIdleTimer();
+
+    events.forEach(e => window.addEventListener(e, handler, { passive: true }));
+    resetIdleTimer(); // Start the timer
+
+    return () => {
+      events.forEach(e => window.removeEventListener(e, handler));
+      if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
+    };
+  }, [masterKeyVersion, resetIdleTimer]);
 
   const login = (newToken: string, newUser: User, newMasterKey?: Uint8Array) => {
     localStorage.setItem('passbox_token', newToken);
@@ -58,11 +105,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = () => {
     localStorage.removeItem('passbox_token');
     localStorage.removeItem('passbox_user');
-    // Wipe master key from memory
-    if (masterKeyRef.current) {
-      masterKeyRef.current.fill(0);
-      masterKeyRef.current = null;
-    }
+    wipeMasterKey();
+    if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
     setToken(null);
     setUser(null);
     setMasterKeyVersion(0);

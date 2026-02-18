@@ -12,10 +12,12 @@ type SecretEnv = {
 
 const secrets = new Hono<SecretEnv>();
 
+const MAX_BLOB_FIELD = 1_000_000; // 1MB max per field
+
 const encryptedBlobSchema = z.object({
-  iv: z.string(),
-  ciphertext: z.string(),
-  tag: z.string(),
+  iv: z.string().max(100),
+  ciphertext: z.string().max(MAX_BLOB_FIELD),
+  tag: z.string().max(100),
   algorithm: z.literal('aes-256-gcm'),
 });
 
@@ -38,8 +40,8 @@ async function checkVaultAccess(supabase: any, vaultId: string, userId: string) 
 const createSecretSchema = z.object({
   name: z.string().min(1).max(256),
   encryptedValue: encryptedBlobSchema,
-  description: z.string().optional(),
-  tags: z.array(z.string()).optional(),
+  description: z.string().max(1000).optional(),
+  tags: z.array(z.string().max(50)).max(20).optional(),
 });
 
 secrets.post('/:vaultId/secrets', async (c) => {
@@ -129,8 +131,8 @@ secrets.get('/:vaultId/secrets/:name', async (c) => {
 // ─── Update Secret ─────────────────────────────────
 const updateSecretSchema = z.object({
   encryptedValue: encryptedBlobSchema,
-  description: z.string().optional(),
-  tags: z.array(z.string()).optional(),
+  description: z.string().max(1000).optional(),
+  tags: z.array(z.string().max(50)).max(20).optional(),
 });
 
 secrets.put('/:vaultId/secrets/:name', async (c) => {
@@ -240,7 +242,7 @@ secrets.get('/:vaultId/secrets/:name/versions', async (c) => {
 
 // ─── Bulk Create/Update ────────────────────────────
 const bulkSchema = z.object({
-  secrets: z.array(createSecretSchema),
+  secrets: z.array(createSecretSchema).max(100),
 });
 
 secrets.post('/:vaultId/secrets/bulk', async (c) => {
