@@ -49,7 +49,16 @@ class ApiClient {
   }
 
   async login(email: string, password: string) {
-    return this.request<any>('/auth/login', {
+    return this.request<{
+      user: { id: string; email: string };
+      session: { accessToken: string; refreshToken: string; expiresAt: string };
+      keys: {
+        publicKey: string;
+        encryptedPrivateKey: string;
+        keyDerivationSalt: string;
+        keyDerivationParams: { iterations: number; memory: number; parallelism: number };
+      } | null;
+    }>('/auth/login', {
       method: 'POST',
       body: JSON.stringify({ email, password }),
     });

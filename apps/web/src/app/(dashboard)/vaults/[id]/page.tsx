@@ -1,18 +1,26 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Modal } from '@/components/ui/modal';
 import { useToast } from '@/components/ui/toast';
 import { useConfirm } from '@/components/ui/confirm';
+import { useAuth } from '@/lib/auth';
 import { api } from '@/lib/api';
+import {
+  decryptVaultKey,
+  encryptSecret,
+  decryptSecret,
+  type EncryptedBlob,
+} from '@/lib/crypto';
 
 interface Vault {
   id: string;
   name: string;
   description: string | null;
+  encryptedVaultKey?: string;
 }
 
 interface Secret {
@@ -32,11 +40,15 @@ export default function VaultDetailPage() {
   const vaultId = params.id as string;
   const { toast } = useToast();
   const { confirm } = useConfirm();
+  const { masterKey } = useAuth();
 
   const [vault, setVault] = useState<Vault | null>(null);
   const [secrets, setSecrets] = useState<Secret[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+
+  // Vault key (decrypted, held in memory)
+  const vaultKeyRef = useRef<Uint8Array | null>(null);
 
   // Create modal
   const [showCreate, setShowCreate] = useState(false);
@@ -56,6 +68,20 @@ export default function VaultDetailPage() {
   // Delete state
   const [deleting, setDeleting] = useState<string | null>(null);
 
+  function getVaultKey(vaultData: Vault): Uint8Array | null {
+    if (vaultKeyRef.current) return vaultKeyRef.current;
+    if (!masterKey || !vaultData.encryptedVaultKey) return null;
+
+    try {
+      const encryptedVaultKey: EncryptedBlob = JSON.parse(vaultData.encryptedVaultKey);
+      const vaultKey = decryptVaultKey(encryptedVaultKey, masterKey);
+      vaultKeyRef.current = vaultKey;
+      return vaultKey;
+    } catch {
+      return null;
+    }
+  }
+
   async function loadData() {
     try {
       const [vaultData, secretsData] = await Promise.all([
@@ -72,6 +98,7 @@ export default function VaultDetailPage() {
   }
 
   useEffect(() => {
+    vaultKeyRef.current = null;
     loadData();
   }, [vaultId]);
 
@@ -85,12 +112,20 @@ export default function VaultDetailPage() {
     setSaving(true);
 
     try {
-      const encryptedValue = JSON.stringify({
-        ciphertext: btoa(newValue),
-        iv: crypto.getRandomValues(new Uint8Array(12)).toString(),
-        tag: 'placeholder',
-        algorithm: 'aes-256-gcm',
-      });
+      const vaultKey = vault ? getVaultKey(vault) : null;
+      let encryptedValue: any;
+
+      if (vaultKey) {
+        encryptedValue = encryptSecret(newValue, vaultKey);
+      } else {
+        // Fallback if no vault key (legacy accounts without crypto)
+        encryptedValue = JSON.stringify({
+          ciphertext: btoa(newValue),
+          iv: crypto.getRandomValues(new Uint8Array(12)).toString(),
+          tag: 'placeholder',
+          algorithm: 'aes-256-gcm',
+        });
+      }
 
       await api.createSecret(vaultId, newName, encryptedValue, newDesc || undefined);
       setShowCreate(false);
@@ -112,12 +147,19 @@ export default function VaultDetailPage() {
     setSaving(true);
 
     try {
-      const encryptedValue = JSON.stringify({
-        ciphertext: btoa(editValue),
-        iv: crypto.getRandomValues(new Uint8Array(12)).toString(),
-        tag: 'placeholder',
-        algorithm: 'aes-256-gcm',
-      });
+      const vaultKey = vault ? getVaultKey(vault) : null;
+      let encryptedValue: any;
+
+      if (vaultKey) {
+        encryptedValue = encryptSecret(editValue, vaultKey);
+      } else {
+        encryptedValue = JSON.stringify({
+          ciphertext: btoa(editValue),
+          iv: crypto.getRandomValues(new Uint8Array(12)).toString(),
+          tag: 'placeholder',
+          algorithm: 'aes-256-gcm',
+        });
+      }
 
       await api.updateSecret(vaultId, editSecret.name, encryptedValue);
       setEditSecret(null);
@@ -171,8 +213,15 @@ export default function VaultDetailPage() {
 
   function decodeValue(encrypted: string): string {
     try {
-      const parsed = JSON.parse(encrypted);
-      return atob(parsed.ciphertext);
+      const blob: EncryptedBlob = JSON.parse(encrypted);
+      const vaultKey = vault ? getVaultKey(vault) : null;
+
+      if (vaultKey && blob.tag !== 'placeholder') {
+        return decryptSecret(blob, vaultKey);
+      }
+
+      // Fallback for legacy placeholder encryption
+      return atob(blob.ciphertext);
     } catch {
       return '***';
     }
@@ -208,6 +257,13 @@ export default function VaultDetailPage() {
         </div>
         <Button onClick={() => setShowCreate(true)}>+ Add Secret</Button>
       </div>
+
+      {/* Crypto status */}
+      {!masterKey && (
+        <div className="rounded-lg bg-warning/10 border border-warning/30 p-3 text-sm text-warning">
+          Encryption key not available. Log in again to enable E2E encryption.
+        </div>
+      )}
 
       {/* Search bar */}
       {secrets.length > 0 && (

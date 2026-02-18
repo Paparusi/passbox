@@ -5,8 +5,19 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Modal } from '@/components/ui/modal';
 import { useAuth } from '@/lib/auth';
 import { api } from '@/lib/api';
+import {
+  deriveMasterKey,
+  generateSalt,
+  generateKeyPair,
+  encryptBytes,
+  createRecoveryKey,
+  serializePublicKey,
+  toBase64,
+  getDefaultKdfParams,
+} from '@/lib/crypto';
 
 function getPasswordStrength(password: string): { score: number; label: string; color: string } {
   let score = 0;
@@ -28,6 +39,8 @@ export default function RegisterPage() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [loadingMsg, setLoadingMsg] = useState('');
+  const [recoveryKey, setRecoveryKey] = useState<string | null>(null);
   const { login } = useAuth();
   const router = useRouter();
 
@@ -50,27 +63,51 @@ export default function RegisterPage() {
     setLoading(true);
 
     try {
-      // Generate placeholder keys for now (real crypto will be added)
-      const salt = crypto.getRandomValues(new Uint8Array(32));
-      const saltHex = Array.from(salt).map(b => b.toString(16).padStart(2, '0')).join('');
+      // 1. Generate salt and derive master key (CPU-intensive)
+      setLoadingMsg('Deriving encryption key...');
+      const salt = generateSalt();
+      const kdfParams = getDefaultKdfParams();
 
+      // Use setTimeout to allow UI to update before blocking
+      await new Promise(resolve => setTimeout(resolve, 50));
+      const masterKey = deriveMasterKey(password, salt, kdfParams);
+
+      // 2. Generate X25519 key pair
+      setLoadingMsg('Generating key pair...');
+      const keyPair = generateKeyPair();
+
+      // 3. Encrypt private key with master key
+      const encryptedPrivateKey = encryptBytes(keyPair.privateKey, masterKey);
+
+      // 4. Create recovery key
+      const { recoveryKey: recKey, encryptedMasterKey } = createRecoveryKey(masterKey);
+
+      // 5. Register on server
+      setLoadingMsg('Creating account...');
       const data = await api.register(email, password, {
-        publicKey: `pub_${saltHex.slice(0, 32)}`,
-        encryptedPrivateKey: `enc_${saltHex.slice(32)}`,
-        encryptedMasterKeyRecovery: `rec_${saltHex}`,
-        keyDerivationSalt: saltHex,
-        keyDerivationParams: { iterations: 3, memory: 65536, parallelism: 4 },
+        publicKey: serializePublicKey(keyPair.publicKey),
+        encryptedPrivateKey: JSON.stringify(encryptedPrivateKey),
+        encryptedMasterKeyRecovery: JSON.stringify(encryptedMasterKey),
+        keyDerivationSalt: toBase64(salt),
+        keyDerivationParams: kdfParams,
       });
 
       if (data.session) {
-        login(data.session.accessToken, data.user);
-        router.push('/vaults');
+        login(data.session.accessToken, data.user, masterKey);
+        // Show recovery key before navigating
+        setRecoveryKey(recKey);
       }
     } catch (err: any) {
       setError(err.message || 'Registration failed');
     } finally {
       setLoading(false);
+      setLoadingMsg('');
     }
+  }
+
+  function handleRecoveryDismiss() {
+    setRecoveryKey(null);
+    router.push('/vaults');
   }
 
   return (
@@ -93,6 +130,7 @@ export default function RegisterPage() {
             onChange={(e) => setEmail(e.target.value)}
             autoComplete="email"
             required
+            disabled={loading}
           />
           <div className="space-y-2">
             <Input
@@ -104,6 +142,7 @@ export default function RegisterPage() {
               onChange={(e) => setPassword(e.target.value)}
               autoComplete="new-password"
               required
+              disabled={loading}
             />
             {password.length > 0 && (
               <div className="space-y-1">
@@ -130,6 +169,7 @@ export default function RegisterPage() {
             onChange={(e) => setConfirmPassword(e.target.value)}
             autoComplete="new-password"
             required
+            disabled={loading}
           />
 
           {error && (
@@ -139,7 +179,7 @@ export default function RegisterPage() {
           )}
 
           <Button type="submit" className="w-full" size="lg" disabled={loading}>
-            {loading ? 'Creating account...' : 'Create Account'}
+            {loading ? loadingMsg || 'Creating account...' : 'Create Account'}
           </Button>
         </form>
 
@@ -150,6 +190,30 @@ export default function RegisterPage() {
           </Link>
         </p>
       </div>
+
+      {/* Recovery Key Modal */}
+      <Modal
+        open={!!recoveryKey}
+        onClose={handleRecoveryDismiss}
+        title="Save Your Recovery Key"
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            This recovery key is the <strong>only way</strong> to recover your account if you forget your master password. Save it somewhere safe — it will <strong>not be shown again</strong>.
+          </p>
+          <div className="rounded-lg bg-muted border border-border p-4 break-all">
+            <code className="text-sm font-mono text-warning">{recoveryKey}</code>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Write this down and store it offline. Do not share it with anyone.
+          </p>
+          <div className="flex justify-end">
+            <Button onClick={handleRecoveryDismiss}>
+              I&apos;ve saved my recovery key
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }

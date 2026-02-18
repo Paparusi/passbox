@@ -7,7 +7,9 @@ import { Input } from '@/components/ui/input';
 import { Modal } from '@/components/ui/modal';
 import { useToast } from '@/components/ui/toast';
 import { useConfirm } from '@/components/ui/confirm';
+import { useAuth } from '@/lib/auth';
 import { api } from '@/lib/api';
+import { createVaultKey } from '@/lib/crypto';
 
 interface Vault {
   id: string;
@@ -22,6 +24,7 @@ export default function VaultsPage() {
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
   const { confirm } = useConfirm();
+  const { masterKey } = useAuth();
 
   // Create modal
   const [showCreate, setShowCreate] = useState(false);
@@ -52,14 +55,19 @@ export default function VaultsPage() {
     setCreating(true);
 
     try {
-      const salt = crypto.getRandomValues(new Uint8Array(32));
-      const saltHex = Array.from(salt).map(b => b.toString(16).padStart(2, '0')).join('');
+      if (!masterKey) {
+        toast('Please log in again to create vaults', 'error');
+        return;
+      }
+
+      const { encryptedVaultKey } = createVaultKey(masterKey);
+      const encryptedVaultKeyStr = JSON.stringify(encryptedVaultKey);
 
       await api.createVault(
         newName,
         newDesc,
-        `vk_${saltHex}`,
-        `evk_${saltHex}`
+        encryptedVaultKeyStr,
+        encryptedVaultKeyStr
       );
 
       setShowCreate(false);

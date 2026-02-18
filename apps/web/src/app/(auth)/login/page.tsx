@@ -7,12 +7,14 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useAuth } from '@/lib/auth';
 import { api } from '@/lib/api';
+import { deriveMasterKey, fromBase64 } from '@/lib/crypto';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [loadingMsg, setLoadingMsg] = useState('');
   const { login } = useAuth();
   const router = useRouter();
 
@@ -22,13 +24,26 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
+      setLoadingMsg('Authenticating...');
       const data = await api.login(email, password);
-      login(data.session.accessToken, data.user);
+
+      let masterKey: Uint8Array | undefined;
+
+      // Derive master key if server returned key params
+      if (data.keys) {
+        setLoadingMsg('Deriving encryption key...');
+        await new Promise(resolve => setTimeout(resolve, 50));
+        const salt = fromBase64(data.keys.keyDerivationSalt);
+        masterKey = deriveMasterKey(password, salt, data.keys.keyDerivationParams);
+      }
+
+      login(data.session.accessToken, data.user, masterKey);
       router.push('/vaults');
     } catch (err: any) {
       setError(err.message || 'Login failed');
     } finally {
       setLoading(false);
+      setLoadingMsg('');
     }
   }
 
@@ -52,6 +67,7 @@ export default function LoginPage() {
             onChange={(e) => setEmail(e.target.value)}
             autoComplete="email"
             required
+            disabled={loading}
           />
           <Input
             id="password"
@@ -62,6 +78,7 @@ export default function LoginPage() {
             onChange={(e) => setPassword(e.target.value)}
             autoComplete="current-password"
             required
+            disabled={loading}
           />
 
           {error && (
@@ -71,7 +88,7 @@ export default function LoginPage() {
           )}
 
           <Button type="submit" className="w-full" size="lg" disabled={loading}>
-            {loading ? 'Signing in...' : 'Sign In'}
+            {loading ? loadingMsg || 'Signing in...' : 'Sign In'}
           </Button>
         </form>
 
