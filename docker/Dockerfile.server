@@ -11,7 +11,7 @@ COPY packages/crypto/ packages/crypto/
 COPY packages/sdk/ packages/sdk/
 COPY apps/server/ apps/server/
 RUN pnpm install --frozen-lockfile
-RUN pnpm --filter @passbox/server build
+RUN pnpm --filter @pabox/server build
 
 # Production stage — minimal image, no node_modules needed (all bundled)
 FROM node:20-slim AS runner
