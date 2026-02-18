@@ -38,8 +38,9 @@ export default function VaultDetailPage() {
   const [editSecret, setEditSecret] = useState<Secret | null>(null);
   const [editValue, setEditValue] = useState('');
 
-  // Reveal state
+  // Reveal + copy state
   const [revealed, setRevealed] = useState<Set<string>>(new Set());
+  const [copied, setCopied] = useState<string | null>(null);
 
   // Delete state
   const [deleting, setDeleting] = useState<string | null>(null);
@@ -131,6 +132,13 @@ export default function VaultDetailPage() {
     });
   }
 
+  async function copyValue(name: string, encrypted: string) {
+    const value = decodeValue(encrypted);
+    await navigator.clipboard.writeText(value);
+    setCopied(name);
+    setTimeout(() => setCopied(null), 2000);
+  }
+
   function decodeValue(encrypted: string): string {
     try {
       const parsed = JSON.parse(encrypted);
@@ -212,6 +220,12 @@ export default function VaultDetailPage() {
                         className="text-xs text-muted-foreground hover:text-foreground transition-colors"
                       >
                         {revealed.has(secret.name) ? 'Hide' : 'Show'}
+                      </button>
+                      <button
+                        onClick={() => copyValue(secret.name, secret.encrypted_value)}
+                        className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                      >
+                        {copied === secret.name ? 'Copied!' : 'Copy'}
                       </button>
                     </div>
                   </td>
