@@ -7,6 +7,12 @@ import { Input } from '@/components/ui/input';
 import { Modal } from '@/components/ui/modal';
 import { api } from '@/lib/api';
 
+interface Vault {
+  id: string;
+  name: string;
+  description: string | null;
+}
+
 interface Secret {
   id: string;
   name: string;
@@ -23,9 +29,11 @@ export default function VaultDetailPage() {
   const router = useRouter();
   const vaultId = params.id as string;
 
+  const [vault, setVault] = useState<Vault | null>(null);
   const [secrets, setSecrets] = useState<Secret[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [search, setSearch] = useState('');
 
   // Create modal
   const [showCreate, setShowCreate] = useState(false);
@@ -45,27 +53,35 @@ export default function VaultDetailPage() {
   // Delete state
   const [deleting, setDeleting] = useState<string | null>(null);
 
-  async function loadSecrets() {
+  async function loadData() {
     try {
-      const data = await api.getSecrets(vaultId);
-      setSecrets(data || []);
+      const [vaultData, secretsData] = await Promise.all([
+        api.getVault(vaultId),
+        api.getSecrets(vaultId),
+      ]);
+      setVault(vaultData);
+      setSecrets(secretsData || []);
     } catch (err: any) {
-      setError(err.message || 'Failed to load secrets');
+      setError(err.message || 'Failed to load vault');
     } finally {
       setLoading(false);
     }
   }
 
   useEffect(() => {
-    loadSecrets();
+    loadData();
   }, [vaultId]);
+
+  const filteredSecrets = secrets.filter(s =>
+    s.name.toLowerCase().includes(search.toLowerCase()) ||
+    s.description?.toLowerCase().includes(search.toLowerCase())
+  );
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
     setSaving(true);
 
     try {
-      // Placeholder encrypted value (real E2E encryption will wrap this)
       const encryptedValue = JSON.stringify({
         ciphertext: btoa(newValue),
         iv: crypto.getRandomValues(new Uint8Array(12)).toString(),
@@ -78,7 +94,7 @@ export default function VaultDetailPage() {
       setNewName('');
       setNewValue('');
       setNewDesc('');
-      await loadSecrets();
+      await loadData();
     } catch (err: any) {
       setError(err.message || 'Failed to create secret');
     } finally {
@@ -102,7 +118,7 @@ export default function VaultDetailPage() {
       await api.updateSecret(vaultId, editSecret.name, encryptedValue);
       setEditSecret(null);
       setEditValue('');
-      await loadSecrets();
+      await loadData();
     } catch (err: any) {
       setError(err.message || 'Failed to update secret');
     } finally {
@@ -158,16 +174,23 @@ export default function VaultDetailPage() {
 
   return (
     <div className="space-y-6">
+      {/* Header */}
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <button
-            onClick={() => router.push('/vaults')}
-            className="text-muted-foreground hover:text-foreground transition-colors"
-          >
-            &larr; Vaults
-          </button>
-          <span className="text-muted-foreground">/</span>
-          <h1 className="text-2xl font-bold">Secrets</h1>
+        <div>
+          <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
+            <button
+              onClick={() => router.push('/vaults')}
+              className="hover:text-foreground transition-colors"
+            >
+              Vaults
+            </button>
+            <span>/</span>
+            <span className="text-foreground">{vault?.name || 'Vault'}</span>
+          </div>
+          <h1 className="text-2xl font-bold">{vault?.name || 'Vault'}</h1>
+          {vault?.description && (
+            <p className="text-sm text-muted-foreground mt-1">{vault.description}</p>
+          )}
         </div>
         <Button onClick={() => setShowCreate(true)}>+ Add Secret</Button>
       </div>
@@ -175,6 +198,24 @@ export default function VaultDetailPage() {
       {error && (
         <div className="rounded-lg bg-destructive/10 border border-destructive/20 p-3 text-sm text-destructive">
           {error}
+        </div>
+      )}
+
+      {/* Search bar (only show when there are secrets) */}
+      {secrets.length > 0 && (
+        <div className="flex items-center gap-4">
+          <div className="flex-1">
+            <input
+              type="text"
+              placeholder="Search secrets..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="flex h-10 w-full max-w-sm rounded-lg border border-border bg-muted px-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-colors"
+            />
+          </div>
+          <span className="text-sm text-muted-foreground">
+            {filteredSecrets.length} secret{filteredSecrets.length !== 1 ? 's' : ''}
+          </span>
         </div>
       )}
 
@@ -186,6 +227,10 @@ export default function VaultDetailPage() {
             Add your first secret to this vault
           </p>
           <Button onClick={() => setShowCreate(true)}>Add Secret</Button>
+        </div>
+      ) : filteredSecrets.length === 0 ? (
+        <div className="text-center py-12 text-muted-foreground text-sm">
+          No secrets matching &quot;{search}&quot;
         </div>
       ) : (
         <div className="border border-border rounded-xl overflow-hidden">
@@ -200,7 +245,7 @@ export default function VaultDetailPage() {
               </tr>
             </thead>
             <tbody>
-              {secrets.map((secret) => (
+              {filteredSecrets.map((secret) => (
                 <tr key={secret.id} className="border-b border-border last:border-0 hover:bg-muted/30 transition-colors">
                   <td className="px-4 py-3">
                     <span className="font-mono text-sm font-medium">{secret.name}</span>

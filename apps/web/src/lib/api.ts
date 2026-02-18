@@ -67,6 +67,10 @@ class ApiClient {
     });
   }
 
+  async getVault(id: string) {
+    return this.request<any>(`/vaults/${id}`);
+  }
+
   async deleteVault(id: string) {
     return this.request<any>(`/vaults/${id}`, { method: 'DELETE' });
   }

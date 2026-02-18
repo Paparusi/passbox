@@ -34,3 +34,5 @@ supabase/.branches/
 # Build
 .pnpm-store/
 .next/
+
+.vercel
