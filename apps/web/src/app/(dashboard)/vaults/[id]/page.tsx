@@ -5,6 +5,8 @@ import { useParams, useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Modal } from '@/components/ui/modal';
+import { useToast } from '@/components/ui/toast';
+import { useConfirm } from '@/components/ui/confirm';
 import { api } from '@/lib/api';
 
 interface Vault {
@@ -28,11 +30,12 @@ export default function VaultDetailPage() {
   const params = useParams();
   const router = useRouter();
   const vaultId = params.id as string;
+  const { toast } = useToast();
+  const { confirm } = useConfirm();
 
   const [vault, setVault] = useState<Vault | null>(null);
   const [secrets, setSecrets] = useState<Secret[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
   const [search, setSearch] = useState('');
 
   // Create modal
@@ -62,7 +65,7 @@ export default function VaultDetailPage() {
       setVault(vaultData);
       setSecrets(secretsData || []);
     } catch (err: any) {
-      setError(err.message || 'Failed to load vault');
+      toast(err.message || 'Failed to load vault', 'error');
     } finally {
       setLoading(false);
     }
@@ -94,9 +97,10 @@ export default function VaultDetailPage() {
       setNewName('');
       setNewValue('');
       setNewDesc('');
+      toast('Secret created', 'success');
       await loadData();
     } catch (err: any) {
-      setError(err.message || 'Failed to create secret');
+      toast(err.message || 'Failed to create secret', 'error');
     } finally {
       setSaving(false);
     }
@@ -118,22 +122,31 @@ export default function VaultDetailPage() {
       await api.updateSecret(vaultId, editSecret.name, encryptedValue);
       setEditSecret(null);
       setEditValue('');
+      toast('Secret updated', 'success');
       await loadData();
     } catch (err: any) {
-      setError(err.message || 'Failed to update secret');
+      toast(err.message || 'Failed to update secret', 'error');
     } finally {
       setSaving(false);
     }
   }
 
   async function handleDelete(name: string) {
-    if (!confirm(`Delete secret "${name}"? This cannot be undone.`)) return;
+    const ok = await confirm({
+      title: 'Delete Secret',
+      message: `Delete secret "${name}"? This cannot be undone.`,
+      confirmLabel: 'Delete',
+      destructive: true,
+    });
+    if (!ok) return;
+
     setDeleting(name);
     try {
       await api.deleteSecret(vaultId, name);
       setSecrets(secrets.filter(s => s.name !== name));
+      toast('Secret deleted', 'success');
     } catch (err: any) {
-      setError(err.message || 'Failed to delete secret');
+      toast(err.message || 'Failed to delete secret', 'error');
     } finally {
       setDeleting(null);
     }
@@ -152,6 +165,7 @@ export default function VaultDetailPage() {
     const value = decodeValue(encrypted);
     await navigator.clipboard.writeText(value);
     setCopied(name);
+    toast('Copied to clipboard', 'success');
     setTimeout(() => setCopied(null), 2000);
   }
 
@@ -175,7 +189,7 @@ export default function VaultDetailPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
             <button
@@ -195,13 +209,7 @@ export default function VaultDetailPage() {
         <Button onClick={() => setShowCreate(true)}>+ Add Secret</Button>
       </div>
 
-      {error && (
-        <div className="rounded-lg bg-destructive/10 border border-destructive/20 p-3 text-sm text-destructive">
-          {error}
-        </div>
-      )}
-
-      {/* Search bar (only show when there are secrets) */}
+      {/* Search bar */}
       {secrets.length > 0 && (
         <div className="flex items-center gap-4">
           <div className="flex-1">
@@ -221,7 +229,7 @@ export default function VaultDetailPage() {
 
       {secrets.length === 0 ? (
         <div className="text-center py-20 border border-dashed border-border rounded-xl">
-          <div className="text-4xl mb-4">🔑</div>
+          <div className="text-4xl mb-4">&#x1f511;</div>
           <h3 className="text-lg font-semibold mb-2">No secrets yet</h3>
           <p className="text-muted-foreground text-sm mb-4">
             Add your first secret to this vault
@@ -233,80 +241,142 @@ export default function VaultDetailPage() {
           No secrets matching &quot;{search}&quot;
         </div>
       ) : (
-        <div className="border border-border rounded-xl overflow-hidden">
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-border bg-muted/50">
-                <th className="text-left text-xs font-medium text-muted-foreground px-4 py-3">NAME</th>
-                <th className="text-left text-xs font-medium text-muted-foreground px-4 py-3">VALUE</th>
-                <th className="text-left text-xs font-medium text-muted-foreground px-4 py-3">VERSION</th>
-                <th className="text-left text-xs font-medium text-muted-foreground px-4 py-3">UPDATED</th>
-                <th className="text-right text-xs font-medium text-muted-foreground px-4 py-3">ACTIONS</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredSecrets.map((secret) => (
-                <tr key={secret.id} className="border-b border-border last:border-0 hover:bg-muted/30 transition-colors">
-                  <td className="px-4 py-3">
+        <>
+          {/* Desktop table */}
+          <div className="hidden md:block border border-border rounded-xl overflow-hidden">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-border bg-muted/50">
+                  <th className="text-left text-xs font-medium text-muted-foreground px-4 py-3">NAME</th>
+                  <th className="text-left text-xs font-medium text-muted-foreground px-4 py-3">VALUE</th>
+                  <th className="text-left text-xs font-medium text-muted-foreground px-4 py-3">VERSION</th>
+                  <th className="text-left text-xs font-medium text-muted-foreground px-4 py-3">UPDATED</th>
+                  <th className="text-right text-xs font-medium text-muted-foreground px-4 py-3">ACTIONS</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredSecrets.map((secret) => (
+                  <tr key={secret.id} className="border-b border-border last:border-0 hover:bg-muted/30 transition-colors">
+                    <td className="px-4 py-3">
+                      <span className="font-mono text-sm font-medium">{secret.name}</span>
+                      {secret.description && (
+                        <p className="text-xs text-muted-foreground mt-0.5">{secret.description}</p>
+                      )}
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-2">
+                        <code className="text-sm text-muted-foreground font-mono">
+                          {revealed.has(secret.name)
+                            ? decodeValue(secret.encrypted_value)
+                            : '••••••••'}
+                        </code>
+                        <button
+                          onClick={() => toggleReveal(secret.name)}
+                          className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                          aria-label={revealed.has(secret.name) ? 'Hide value' : 'Show value'}
+                        >
+                          {revealed.has(secret.name) ? 'Hide' : 'Show'}
+                        </button>
+                        <button
+                          onClick={() => copyValue(secret.name, secret.encrypted_value)}
+                          className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                          aria-label="Copy value"
+                        >
+                          {copied === secret.name ? 'Copied!' : 'Copy'}
+                        </button>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className="text-sm text-muted-foreground">v{secret.version}</span>
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className="text-sm text-muted-foreground">
+                        {new Date(secret.updated_at).toLocaleDateString()}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center justify-end gap-2">
+                        <button
+                          onClick={() => {
+                            setEditSecret(secret);
+                            setEditValue(decodeValue(secret.encrypted_value));
+                          }}
+                          className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          onClick={() => handleDelete(secret.name)}
+                          disabled={deleting === secret.name}
+                          className="text-xs text-muted-foreground hover:text-destructive transition-colors"
+                        >
+                          {deleting === secret.name ? '...' : 'Delete'}
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Mobile cards */}
+          <div className="md:hidden space-y-3">
+            {filteredSecrets.map((secret) => (
+              <div key={secret.id} className="border border-border rounded-xl bg-card p-4 space-y-3">
+                <div className="flex items-start justify-between">
+                  <div>
                     <span className="font-mono text-sm font-medium">{secret.name}</span>
                     {secret.description && (
                       <p className="text-xs text-muted-foreground mt-0.5">{secret.description}</p>
                     )}
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-2">
-                      <code className="text-sm text-muted-foreground font-mono">
-                        {revealed.has(secret.name)
-                          ? decodeValue(secret.encrypted_value)
-                          : '••••••••'}
-                      </code>
-                      <button
-                        onClick={() => toggleReveal(secret.name)}
-                        className="text-xs text-muted-foreground hover:text-foreground transition-colors"
-                      >
-                        {revealed.has(secret.name) ? 'Hide' : 'Show'}
-                      </button>
-                      <button
-                        onClick={() => copyValue(secret.name, secret.encrypted_value)}
-                        className="text-xs text-muted-foreground hover:text-foreground transition-colors"
-                      >
-                        {copied === secret.name ? 'Copied!' : 'Copy'}
-                      </button>
-                    </div>
-                  </td>
-                  <td className="px-4 py-3">
-                    <span className="text-sm text-muted-foreground">v{secret.version}</span>
-                  </td>
-                  <td className="px-4 py-3">
-                    <span className="text-sm text-muted-foreground">
-                      {new Date(secret.updated_at).toLocaleDateString()}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center justify-end gap-2">
-                      <button
-                        onClick={() => {
-                          setEditSecret(secret);
-                          setEditValue(decodeValue(secret.encrypted_value));
-                        }}
-                        className="text-xs text-muted-foreground hover:text-foreground transition-colors"
-                      >
-                        Edit
-                      </button>
-                      <button
-                        onClick={() => handleDelete(secret.name)}
-                        disabled={deleting === secret.name}
-                        className="text-xs text-muted-foreground hover:text-destructive transition-colors"
-                      >
-                        {deleting === secret.name ? '...' : 'Delete'}
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+                  </div>
+                  <span className="text-xs text-muted-foreground">v{secret.version}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <code className="text-sm text-muted-foreground font-mono flex-1 truncate">
+                    {revealed.has(secret.name)
+                      ? decodeValue(secret.encrypted_value)
+                      : '••••••••'}
+                  </code>
+                </div>
+                <div className="flex items-center gap-3 pt-1 border-t border-border">
+                  <button
+                    onClick={() => toggleReveal(secret.name)}
+                    className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    {revealed.has(secret.name) ? 'Hide' : 'Show'}
+                  </button>
+                  <button
+                    onClick={() => copyValue(secret.name, secret.encrypted_value)}
+                    className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    {copied === secret.name ? 'Copied!' : 'Copy'}
+                  </button>
+                  <button
+                    onClick={() => {
+                      setEditSecret(secret);
+                      setEditValue(decodeValue(secret.encrypted_value));
+                    }}
+                    className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    Edit
+                  </button>
+                  <button
+                    onClick={() => handleDelete(secret.name)}
+                    disabled={deleting === secret.name}
+                    className="text-xs text-muted-foreground hover:text-destructive transition-colors ml-auto"
+                  >
+                    {deleting === secret.name ? '...' : 'Delete'}
+                  </button>
+                  <span className="text-xs text-muted-foreground">
+                    {new Date(secret.updated_at).toLocaleDateString()}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </>
       )}
 
       {/* Create Secret Modal */}

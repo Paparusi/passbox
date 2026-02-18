@@ -5,6 +5,8 @@ import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Modal } from '@/components/ui/modal';
+import { useToast } from '@/components/ui/toast';
+import { useConfirm } from '@/components/ui/confirm';
 import { api } from '@/lib/api';
 
 interface Vault {
@@ -18,7 +20,8 @@ interface Vault {
 export default function VaultsPage() {
   const [vaults, setVaults] = useState<Vault[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  const { toast } = useToast();
+  const { confirm } = useConfirm();
 
   // Create modal
   const [showCreate, setShowCreate] = useState(false);
@@ -34,7 +37,7 @@ export default function VaultsPage() {
       const data = await api.getVaults();
       setVaults(data || []);
     } catch (err: any) {
-      setError(err.message || 'Failed to load vaults');
+      toast(err.message || 'Failed to load vaults', 'error');
     } finally {
       setLoading(false);
     }
@@ -62,22 +65,31 @@ export default function VaultsPage() {
       setShowCreate(false);
       setNewName('');
       setNewDesc('');
+      toast('Vault created successfully', 'success');
       await loadVaults();
     } catch (err: any) {
-      setError(err.message || 'Failed to create vault');
+      toast(err.message || 'Failed to create vault', 'error');
     } finally {
       setCreating(false);
     }
   }
 
-  async function handleDelete(id: string) {
-    if (!confirm('Are you sure you want to delete this vault? All secrets inside will be lost.')) return;
+  async function handleDelete(id: string, name: string) {
+    const ok = await confirm({
+      title: 'Delete Vault',
+      message: `Are you sure you want to delete "${name}"? All secrets inside will be permanently lost.`,
+      confirmLabel: 'Delete',
+      destructive: true,
+    });
+    if (!ok) return;
+
     setDeleting(id);
     try {
       await api.deleteVault(id);
       setVaults(vaults.filter(v => v.id !== id));
+      toast('Vault deleted', 'success');
     } catch (err: any) {
-      setError(err.message || 'Failed to delete vault');
+      toast(err.message || 'Failed to delete vault', 'error');
     } finally {
       setDeleting(null);
     }
@@ -103,15 +115,9 @@ export default function VaultsPage() {
         <Button onClick={() => setShowCreate(true)}>+ New Vault</Button>
       </div>
 
-      {error && (
-        <div className="rounded-lg bg-destructive/10 border border-destructive/20 p-3 text-sm text-destructive">
-          {error}
-        </div>
-      )}
-
       {vaults.length === 0 ? (
         <div className="text-center py-20 border border-dashed border-border rounded-xl">
-          <div className="text-4xl mb-4">🔐</div>
+          <div className="text-4xl mb-4">&#x1f510;</div>
           <h3 className="text-lg font-semibold mb-2">No vaults yet</h3>
           <p className="text-muted-foreground text-sm mb-4">
             Create your first vault to start storing secrets
@@ -138,7 +144,8 @@ export default function VaultsPage() {
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
-                    handleDelete(vault.id);
+                    e.preventDefault();
+                    handleDelete(vault.id, vault.name);
                   }}
                   disabled={deleting === vault.id}
                   className="relative z-20 text-muted-foreground hover:text-destructive transition-colors opacity-0 group-hover:opacity-100 text-sm"
