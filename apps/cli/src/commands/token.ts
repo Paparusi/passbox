@@ -1,5 +1,6 @@
 import { Command } from 'commander';
 import ora from 'ora';
+import { encryptBytes, toBase64 } from '@pabox/crypto';
 import { getClient } from '../lib/client.js';
 import { printSuccess, printError, printTable, printWarning } from '../lib/output.js';
 
@@ -28,9 +29,10 @@ tokenCommand
       }
 
       printTable(
-        ['Name', 'Prefix', 'Permissions', 'Expires', 'Created'],
+        ['Name', 'ID', 'Prefix', 'Permissions', 'Expires', 'Created'],
         tokens.map(t => [
           t.name,
+          t.id.slice(0, 8) + '...',
           t.token_prefix + '...',
           t.permissions.join(', '),
           t.expires_at ? new Date(t.expires_at).toLocaleDateString() : 'Never',
@@ -61,17 +63,27 @@ tokenCommand
 
       const vaultIds = options.vaultIds ? options.vaultIds.split(',').map((id: string) => id.trim()) : undefined;
 
-      const spinner = ora('Creating service token...').start();
       const pb = getClient();
 
-      // Service token creation requires an encrypted master key.
-      // For now, we pass a placeholder — full crypto requires the master key.
+      // Get master key — required for encrypting the token's master key copy
+      const masterKey = pb.getMasterKey();
+      if (!masterKey) {
+        printError('Master key not available. Login with email+password first: passbox login');
+        process.exit(1);
+      }
+
+      // Encrypt master key so the service token can decrypt secrets
+      const encryptedMk = encryptBytes(masterKey, masterKey);
+      const encryptedMasterKey = JSON.stringify(encryptedMk);
+
+      const spinner = ora('Creating service token...').start();
+
       const result = await pb.tokens.create({
         name,
         permissions,
         vaultIds,
         expiresAt: options.expires,
-        encryptedMasterKey: '{}',
+        encryptedMasterKey,
       });
 
       spinner.succeed('Service token created');

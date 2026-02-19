@@ -171,6 +171,20 @@ export class PassBox {
   }
 
   /**
+   * Set the master key directly (e.g. restored from a persisted session).
+   */
+  setMasterKey(key: Uint8Array) {
+    this.masterKey = key;
+  }
+
+  /**
+   * Get the master key (for operations that need it outside the SDK).
+   */
+  getMasterKey(): Uint8Array | null {
+    return this.masterKey;
+  }
+
+  /**
    * Make a raw authenticated API request. Path is relative to /api/v1.
    */
   async request<T = any>(path: string, options?: { method?: string; body?: unknown }): Promise<T> {
@@ -234,7 +248,7 @@ export class PassBox {
 
 // Re-export types
 export type { VaultData, CreateVaultOptions } from './resources/vaults.js';
-export type { SecretData, GetSecretOptions, SetSecretOptions } from './resources/secrets.js';
+export type { SecretData, SecretVersionData, GetSecretOptions, SetSecretOptions } from './resources/secrets.js';
 export type { EnvironmentData, CreateEnvironmentOptions, CloneEnvironmentOptions } from './resources/environments.js';
 export type { EnvImportOptions } from './resources/env.js';
 export type { ImportResult, ImportOptions } from './resources/importers.js';
@@ -243,4 +257,4 @@ export type { WebhookData, CreateWebhookOptions, UpdateWebhookOptions } from './
 export type { RotationConfigData, SetRotationOptions } from './resources/rotation.js';
 export type { ServiceTokenData, CreateTokenOptions, CreateTokenResult } from './resources/tokens.js';
 export type { ChangePasswordOptions } from './resources/account.js';
-export type { SecretVersionData } from './resources/secrets.js';
+export type { EncryptedBlob } from '@pabox/types';

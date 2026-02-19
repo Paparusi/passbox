@@ -2,7 +2,7 @@ import { serve } from '@hono/node-server';
 import { app } from './app.js';
 
 // ─── Environment Validation ─────────────────────
-const requiredEnv = ['SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY'];
+const requiredEnv = ['SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY', 'SUPABASE_ANON_KEY'];
 for (const key of requiredEnv) {
   if (!process.env[key]) {
     console.error(`FATAL: Missing required environment variable: ${key}`);

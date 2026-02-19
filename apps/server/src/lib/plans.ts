@@ -98,7 +98,7 @@ export async function checkVaultLimit(userId: string): Promise<void> {
   }
 }
 
-export async function checkSecretLimit(vaultId: string, userId: string): Promise<void> {
+export async function checkSecretLimit(vaultId: string, userId: string, addCount = 1): Promise<void> {
   const plan = await getUserPlan(userId);
   const limits = getPlanLimits(plan);
   if (limits.maxSecretsPerVault === -1) return;
@@ -109,7 +109,7 @@ export async function checkSecretLimit(vaultId: string, userId: string): Promise
     .select('*', { count: 'exact', head: true })
     .eq('vault_id', vaultId);
 
-  if ((count || 0) >= limits.maxSecretsPerVault) {
+  if ((count || 0) + addCount > limits.maxSecretsPerVault) {
     throw new AppError(
       403,
       'PLAN_LIMIT',

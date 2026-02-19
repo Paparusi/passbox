@@ -1,5 +1,4 @@
 import { PassBox } from '@pabox/sdk';
-import { deriveMasterKey } from '@pabox/crypto';
 import { fromBase64 } from '@pabox/crypto';
 import { getAuth, getServerUrl, getDefaultVault } from './config.js';
 
@@ -23,6 +22,16 @@ export function getClient(): PassBox {
   const defaultVault = getDefaultVault();
   if (defaultVault) {
     pb.setDefaultVault(defaultVault);
+  }
+
+  // Restore master key from login session (stored as base64 in auth.json)
+  if (auth.masterKeyEncrypted) {
+    try {
+      const masterKey = fromBase64(auth.masterKeyEncrypted);
+      pb.setMasterKey(masterKey);
+    } catch {
+      // Master key unavailable — E2E crypto operations will fail
+    }
   }
 
   return pb;

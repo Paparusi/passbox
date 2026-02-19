@@ -1,5 +1,13 @@
 import { Command } from 'commander';
 import ora from 'ora';
+import {
+  decryptBytes,
+  decryptVaultKey,
+  shareVaultKeyForUser,
+  fromBase64,
+  toBase64,
+  type EncryptedBlob,
+} from '@pabox/crypto';
 import { getClient } from '../lib/client.js';
 import { printSuccess, printError, printTable } from '../lib/output.js';
 
@@ -50,19 +58,67 @@ memberCommand
   .option('-r, --role <role>', 'Member role (admin, member, viewer)', 'member')
   .action(async (email: string, options) => {
     try {
-      const spinner = ora(`Inviting ${email}...`).start();
       const pb = getClient();
+      const masterKey = pb.getMasterKey();
 
-      // For proper E2E encryption, we need to share the vault key via X25519.
-      // This requires the master key to decrypt our private key and the vault key.
-      // Using pb.request() to pass through the encrypted vault key.
-      // Note: This requires the SDK to have a master key set (full login, not just token).
-      const vaultKey = await getEncryptedVaultKeyForUser(pb, email, options.vault);
+      if (!masterKey) {
+        printError('Master key not available. Login with email+password first: passbox login');
+        process.exit(1);
+      }
 
+      const spinner = ora(`Inviting ${email}...`).start();
+
+      // 1. Get our encryption keys from server
+      spinner.text = 'Loading encryption keys...';
+      const ourKeys = await pb.request<{
+        publicKey: string;
+        encryptedPrivateKey: string;
+      }>('/auth/keys');
+
+      // 2. Decrypt our private key
+      const encPrivKey: EncryptedBlob = JSON.parse(ourKeys.encryptedPrivateKey);
+      const ourPrivateKey = decryptBytes(encPrivKey, masterKey);
+
+      // 3. Get vault data and decrypt vault key
+      spinner.text = 'Decrypting vault key...';
+      const vaults = await pb.vaults.list();
+      const vault = options.vault
+        ? vaults.find(v => v.name === options.vault || v.id === options.vault)
+        : vaults[0];
+
+      if (!vault) {
+        spinner.fail('Vault not found');
+        process.exit(1);
+      }
+
+      const vaultData = await pb.vaults.get(vault.id);
+      if (!vaultData.encryptedVaultKey) {
+        spinner.fail('Vault key not available');
+        process.exit(1);
+      }
+
+      const encVaultKey: EncryptedBlob = JSON.parse(vaultData.encryptedVaultKey);
+      const vaultKey = decryptVaultKey(encVaultKey, masterKey);
+
+      // 4. Get target user's public key
+      spinner.text = `Looking up ${email}...`;
+      const targetPubKeyStr = await pb.members.getUserPublicKey(email);
+      const targetPublicKey = fromBase64(targetPubKeyStr);
+
+      // 5. X25519 ECDH key exchange to encrypt vault key for target user
+      spinner.text = 'Sharing vault key...';
+      const sharedKey = shareVaultKeyForUser(
+        vaultKey,
+        ourPrivateKey,
+        targetPublicKey,
+        ourKeys.publicKey,
+      );
+
+      // 6. Send invite with encrypted vault key
       await pb.members.add({
         email,
         role: options.role,
-        encryptedVaultKey: vaultKey,
+        encryptedVaultKey: JSON.stringify(sharedKey),
         vault: options.vault,
       });
 
@@ -104,26 +160,3 @@ memberCommand
       process.exit(1);
     }
   });
-
-/**
- * Helper to get the encrypted vault key for sharing with another user.
- * This currently passes a placeholder — full X25519 key exchange requires
- * the master key to be available in the CLI session.
- */
-async function getEncryptedVaultKeyForUser(pb: any, email: string, vault?: string): Promise<string> {
-  // For now, use the SDK's request() to get the public key and vault data.
-  // Full E2E sharing requires:
-  // 1. Decrypt our private key with master key
-  // 2. Get target user's public key
-  // 3. X25519 ECDH to derive shared secret
-  // 4. HKDF to derive encryption key
-  // 5. Encrypt vault key with derived key
-  //
-  // This works when the SDK has a master key (via PassBox.login()).
-  // For service token auth, member invite is not supported.
-  throw new Error(
-    'Member invite via CLI requires full login (passbox login with email+password). ' +
-    'Service token auth does not support member management. ' +
-    'Use the web dashboard at https://passbox.dev to invite members.',
-  );
-}

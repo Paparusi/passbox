@@ -253,17 +253,26 @@ secrets.delete('/:vaultId/secrets/:name', async (c) => {
   const role = await checkVaultAccess(supabase, vaultId, userId);
   if (!['owner', 'admin'].includes(role)) throw Errors.forbidden();
 
-  let query = supabase
+  // Find the secret first to verify it exists
+  let findQuery = supabase
     .from('secrets')
-    .delete()
+    .select('id')
     .eq('vault_id', vaultId)
     .eq('name', name);
 
   if (environmentId) {
-    query = query.eq('environment_id', environmentId);
+    findQuery = findQuery.eq('environment_id', environmentId);
   }
 
-  const { error } = await query;
+  const { data: existing } = await findQuery.single();
+  if (!existing) {
+    throw Errors.notFound(`Secret "${name}"`);
+  }
+
+  const { error } = await supabase
+    .from('secrets')
+    .delete()
+    .eq('id', existing.id);
 
   if (error) {
     throw Errors.internal(error.message);
@@ -332,10 +341,32 @@ secrets.post('/:vaultId/secrets/bulk', async (c) => {
   const role = await checkVaultAccess(supabase, vaultId, userId);
   if (role === 'viewer') throw Errors.forbidden();
 
-  // Check plan limits for new secrets
-  await checkSecretLimit(vaultId, userId);
-
   const environmentId = await resolveEnvironmentId(supabase, vaultId, data.environmentId);
+
+  // Count existing secrets to properly enforce plan limits
+  const { count: currentCount } = await supabase
+    .from('secrets')
+    .select('*', { count: 'exact', head: true })
+    .eq('vault_id', vaultId);
+
+  // Count how many are truly new (not updates)
+  const existingNames = new Set<string>();
+  for (const secret of data.secrets) {
+    const { data: existing } = await supabase
+      .from('secrets')
+      .select('id')
+      .eq('vault_id', vaultId)
+      .eq('environment_id', environmentId)
+      .eq('name', secret.name)
+      .single();
+    if (existing) existingNames.add(secret.name);
+  }
+  const newCount = data.secrets.filter(s => !existingNames.has(s.name)).length;
+
+  // Check plan limits against total after insert
+  if (newCount > 0) {
+    await checkSecretLimit(vaultId, userId, newCount);
+  }
 
   const results = { created: 0, updated: 0, errors: [] as string[] };
 

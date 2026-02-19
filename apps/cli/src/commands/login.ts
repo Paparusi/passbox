@@ -1,5 +1,6 @@
 import { Command } from 'commander';
 import ora from 'ora';
+import { deriveMasterKey, fromBase64, toBase64 } from '@pabox/crypto';
 import { saveAuth, getServerUrl } from '../lib/config.js';
 import { printSuccess, printError } from '../lib/output.js';
 import * as readline from 'node:readline';
@@ -12,7 +13,6 @@ function prompt(question: string, hidden = false): Promise<string> {
     });
 
     if (hidden) {
-      // For password input
       process.stdout.write(question);
       let input = '';
       process.stdin.setRawMode?.(true);
@@ -51,7 +51,6 @@ export const loginCommand = new Command('login')
   .action(async (options) => {
     try {
       if (options.token) {
-        // Service token login
         saveAuth({
           accessToken: options.token,
           refreshToken: '',
@@ -62,7 +61,6 @@ export const loginCommand = new Command('login')
         return;
       }
 
-      // Interactive login
       const email = await prompt('Email: ');
       const password = await prompt('Master Password: ', true);
       const serverUrl = options.server || getServerUrl();
@@ -82,20 +80,30 @@ export const loginCommand = new Command('login')
         process.exit(1);
       }
 
+      const session = data.data.session;
+      const keys = data.data.keys;
+
+      // Derive master key from password using server-provided KDF params
+      let masterKeyBase64: string | undefined;
+
+      if (keys?.keyDerivationSalt && keys?.keyDerivationParams) {
+        spinner.text = 'Deriving encryption key...';
+        const salt = fromBase64(keys.keyDerivationSalt);
+        const masterKey = deriveMasterKey(password, salt, keys.keyDerivationParams);
+        masterKeyBase64 = toBase64(masterKey);
+      }
+
       saveAuth({
-        accessToken: data.data.session.accessToken,
-        refreshToken: data.data.session.refreshToken,
-        expiresAt: data.data.session.expiresAt,
+        accessToken: session.accessToken,
+        refreshToken: session.refreshToken,
+        expiresAt: session.expiresAt,
         email,
+        masterKeyEncrypted: masterKeyBase64,
       });
 
-      spinner.succeed(`Logged in as ${chalk(email)}`);
+      spinner.succeed(`Logged in as \x1b[36m${email}\x1b[0m`);
     } catch (err: any) {
       printError(err.message);
       process.exit(1);
     }
   });
-
-function chalk(text: string): string {
-  return `\x1b[36m${text}\x1b[0m`;
-}
