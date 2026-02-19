@@ -20,6 +20,23 @@ interface Stats {
   subscriptions: Record<string, number>;
 }
 
+interface Revenue {
+  configured: boolean;
+  balance: { available: number; pending: number; currency: string };
+  mrr: number;
+  totalRevenue: number;
+  activeSubscriptions?: number;
+  recentCharges: Array<{
+    id: string;
+    amount: number;
+    currency: string;
+    status: string;
+    description: string;
+    customerEmail: string;
+    created: string;
+  }>;
+}
+
 interface ActivityLog {
   id: string;
   action: string;
@@ -38,6 +55,14 @@ function StatCard({ label, value }: { label: string; value: string | number }) {
       <p className="text-2xl font-bold">{value}</p>
     </div>
   );
+}
+
+function formatCurrency(amount: number, currency: string): string {
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: currency.toUpperCase(),
+    minimumFractionDigits: 2,
+  }).format(amount / 100);
 }
 
 function timeAgo(dateStr: string): string {
@@ -62,6 +87,7 @@ export default function AdminOverviewPage() {
   const { toast } = useToast();
   const router = useRouter();
   const [stats, setStats] = useState<Stats | null>(null);
+  const [revenue, setRevenue] = useState<Revenue | null>(null);
   const [activity, setActivity] = useState<ActivityLog[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -69,11 +95,13 @@ export default function AdminOverviewPage() {
     async function load() {
       try {
         await api.adminCheck();
-        const [statsData, activityData] = await Promise.all([
+        const [statsData, revenueData, activityData] = await Promise.all([
           api.adminGetStats(),
+          api.adminGetRevenue(),
           api.adminGetActivity({ limit: 15 }),
         ]);
         setStats(statsData);
+        setRevenue(revenueData);
         setActivity(activityData);
       } catch (err: any) {
         if (err.message?.includes('permissions') || err.message?.includes('FORBIDDEN')) {
@@ -100,6 +128,7 @@ export default function AdminOverviewPage() {
   if (!stats) return null;
 
   const totalActiveSubs = Object.values(stats.subscriptions).reduce((a, b) => a + b, 0);
+  const cur = revenue?.balance.currency || 'usd';
 
   return (
     <div className="space-y-8">
@@ -119,6 +148,61 @@ export default function AdminOverviewPage() {
           Manage Waitlist
         </Link>
       </div>
+
+      {/* Revenue Section */}
+      {revenue && (
+        <div className="border border-border rounded-xl p-6 space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-semibold">Revenue</h2>
+            {!revenue.configured && (
+              <span className="text-xs text-warning bg-warning/10 px-2 py-1 rounded-full">
+                Stripe not configured
+              </span>
+            )}
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            <div className="space-y-1">
+              <p className="text-sm text-muted-foreground">MRR</p>
+              <p className="text-2xl font-bold text-success">{formatCurrency(revenue.mrr, cur)}</p>
+            </div>
+            <div className="space-y-1">
+              <p className="text-sm text-muted-foreground">Revenue (30d)</p>
+              <p className="text-2xl font-bold">{formatCurrency(revenue.totalRevenue, cur)}</p>
+            </div>
+            <div className="space-y-1">
+              <p className="text-sm text-muted-foreground">Balance Available</p>
+              <p className="text-2xl font-bold">{formatCurrency(revenue.balance.available, cur)}</p>
+            </div>
+            <div className="space-y-1">
+              <p className="text-sm text-muted-foreground">Pending</p>
+              <p className="text-2xl font-bold text-muted-foreground">{formatCurrency(revenue.balance.pending, cur)}</p>
+            </div>
+          </div>
+
+          {/* Recent Charges */}
+          {revenue.recentCharges.length > 0 && (
+            <div className="mt-4">
+              <h3 className="text-sm font-medium text-muted-foreground mb-3">Recent Transactions</h3>
+              <div className="space-y-2">
+                {revenue.recentCharges.map(charge => (
+                  <div key={charge.id} className="flex items-center justify-between text-sm">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <span className={`inline-block w-2 h-2 rounded-full flex-shrink-0 ${
+                        charge.status === 'succeeded' ? 'bg-success' : charge.status === 'pending' ? 'bg-warning' : 'bg-destructive'
+                      }`} />
+                      <span className="truncate">{charge.customerEmail || charge.description || charge.id.slice(-8)}</span>
+                    </div>
+                    <div className="flex items-center gap-3 flex-shrink-0">
+                      <span className="font-medium">{formatCurrency(charge.amount, charge.currency)}</span>
+                      <span className="text-xs text-muted-foreground">{timeAgo(charge.created)}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Primary Stats */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">

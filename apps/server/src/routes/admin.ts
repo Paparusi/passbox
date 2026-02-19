@@ -275,6 +275,91 @@ admin.delete('/users/:id', async (c) => {
   return c.json({ success: true, data: { deleted: targetUserId } });
 });
 
+// ─── Revenue / Stripe Stats ─────────────────────
+admin.get('/revenue', async (c) => {
+  const stripeKey = process.env.STRIPE_SECRET_KEY;
+
+  if (!stripeKey) {
+    return c.json({
+      success: true,
+      data: {
+        configured: false,
+        balance: { available: 0, pending: 0, currency: 'usd' },
+        mrr: 0,
+        totalRevenue: 0,
+        recentCharges: [],
+      },
+    });
+  }
+
+  const stripeGet = async (path: string) => {
+    const res = await fetch(`https://api.stripe.com/v1${path}`, {
+      headers: { 'Authorization': `Bearer ${stripeKey}` },
+    });
+    return res.json();
+  };
+
+  // Fetch balance, recent charges, and active subscriptions in parallel
+  const now = Math.floor(Date.now() / 1000);
+  const thirtyDaysAgo = now - 30 * 24 * 60 * 60;
+
+  const [balanceData, chargesData, subsData, invoicesData] = await Promise.all([
+    stripeGet('/balance'),
+    stripeGet(`/charges?limit=20&created[gte]=${thirtyDaysAgo}`),
+    stripeGet('/subscriptions?status=active&limit=100'),
+    stripeGet(`/invoices?status=paid&limit=100&created[gte]=${thirtyDaysAgo}`),
+  ]);
+
+  // Balance
+  const available = balanceData.available?.reduce((sum: number, b: any) => sum + b.amount, 0) || 0;
+  const pending = balanceData.pending?.reduce((sum: number, b: any) => sum + b.amount, 0) || 0;
+  const currency = balanceData.available?.[0]?.currency || 'usd';
+
+  // MRR from active subscriptions
+  let mrr = 0;
+  if (subsData.data) {
+    for (const sub of subsData.data) {
+      for (const item of sub.items?.data || []) {
+        const amount = item.price?.unit_amount || 0;
+        const interval = item.price?.recurring?.interval;
+        if (interval === 'month') mrr += amount;
+        else if (interval === 'year') mrr += Math.round(amount / 12);
+      }
+    }
+  }
+
+  // Total revenue this month from paid invoices
+  let totalRevenue = 0;
+  if (invoicesData.data) {
+    for (const inv of invoicesData.data) {
+      totalRevenue += inv.amount_paid || 0;
+    }
+  }
+
+  // Recent charges
+  const recentCharges = (chargesData.data || []).slice(0, 10).map((ch: any) => ({
+    id: ch.id,
+    amount: ch.amount,
+    currency: ch.currency,
+    status: ch.status,
+    description: ch.description || ch.statement_descriptor || '',
+    customerEmail: ch.billing_details?.email || ch.receipt_email || '',
+    created: new Date(ch.created * 1000).toISOString(),
+  }));
+
+  return c.json({
+    success: true,
+    data: {
+      configured: true,
+      balance: { available, pending, currency },
+      mrr,
+      totalRevenue,
+      activeSubscriptions: subsData.data?.length || 0,
+      recentCharges,
+    },
+  });
+});
+
 // ─── List Waitlist Entries ───────────────────────
 admin.get('/waitlist', async (c) => {
   const supabase = getSupabaseAdmin();

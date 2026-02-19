@@ -312,6 +312,25 @@ class ApiClient {
     }>('/admin/stats');
   }
 
+  async adminGetRevenue() {
+    return this.request<{
+      configured: boolean;
+      balance: { available: number; pending: number; currency: string };
+      mrr: number;
+      totalRevenue: number;
+      activeSubscriptions?: number;
+      recentCharges: Array<{
+        id: string;
+        amount: number;
+        currency: string;
+        status: string;
+        description: string;
+        customerEmail: string;
+        created: string;
+      }>;
+    }>('/admin/revenue');
+  }
+
   async adminGetActivity(params?: { limit?: number }) {
     const query = new URLSearchParams();
     if (params?.limit) query.set('limit', String(params.limit));
