@@ -16,6 +16,7 @@ import { audit } from './routes/audit.js';
 import { billing } from './routes/billing.js';
 import { webhook } from './routes/webhook.js';
 import { waitlist } from './routes/waitlist.js';
+import { admin } from './routes/admin.js';
 
 const app = new Hono();
 
@@ -93,6 +94,7 @@ protectedApp.route('/vaults', sharing);
 protectedApp.route('/audit', audit);
 protectedApp.route('/billing', billing);
 protectedApp.route('/auth', authProtected);
+protectedApp.route('/admin', admin);
 
 app.route('/api/v1', protectedApp);
 

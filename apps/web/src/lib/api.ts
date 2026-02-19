@@ -290,6 +290,70 @@ class ApiClient {
     const data = await res.json();
     return data.data?.count || 0;
   }
+
+  // Admin
+  async adminCheck() {
+    return this.request<{ isAdmin: boolean }>('/admin/check');
+  }
+
+  async adminGetStats() {
+    return this.request<{
+      totalUsers: number;
+      totalVaults: number;
+      totalSecrets: number;
+      totalOrgs: number;
+      waitlistCount: number;
+      subscriptions: Record<string, number>;
+    }>('/admin/stats');
+  }
+
+  async adminGetUsers(params?: { page?: number; perPage?: number }) {
+    const query = new URLSearchParams();
+    if (params?.page) query.set('page', String(params.page));
+    if (params?.perPage) query.set('perPage', String(params.perPage));
+    const qs = query.toString();
+    return this.request<{
+      users: Array<{
+        id: string;
+        email: string;
+        plan: string;
+        planStatus: string;
+        vaultCount: number;
+        createdAt: string;
+        lastSignIn: string | null;
+      }>;
+      page: number;
+      perPage: number;
+      hasMore: boolean;
+    }>(`/admin/users${qs ? '?' + qs : ''}`);
+  }
+
+  async adminChangeUserPlan(userId: string, plan: string) {
+    return this.request<{ userId: string; plan: string }>(`/admin/users/${userId}/plan`, {
+      method: 'PUT',
+      body: JSON.stringify({ plan }),
+    });
+  }
+
+  async adminGetWaitlist(params?: { page?: number; pageSize?: number }) {
+    const query = new URLSearchParams();
+    if (params?.page) query.set('page', String(params.page));
+    if (params?.pageSize) query.set('pageSize', String(params.pageSize));
+    const qs = query.toString();
+    return this.request<{
+      items: Array<{ id: string; email: string; source: string; created_at: string }>;
+      total: number;
+      page: number;
+      pageSize: number;
+      hasMore: boolean;
+    }>(`/admin/waitlist${qs ? '?' + qs : ''}`);
+  }
+
+  async adminDeleteWaitlistEntry(id: string) {
+    return this.request<{ deleted: string }>(`/admin/waitlist/${id}`, {
+      method: 'DELETE',
+    });
+  }
 }
 
 export const api = new ApiClient();

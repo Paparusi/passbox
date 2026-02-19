@@ -6,18 +6,26 @@ import Link from 'next/link';
 import { AuthProvider, useAuth } from '@/lib/auth';
 import { ToastProvider } from '@/components/ui/toast';
 import { ConfirmProvider } from '@/components/ui/confirm';
+import { api } from '@/lib/api';
 
 function DashboardShell({ children }: { children: React.ReactNode }) {
   const { user, loading, logout } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
     if (!loading && !user) {
       router.push('/login');
     }
   }, [user, loading, router]);
+
+  useEffect(() => {
+    if (user) {
+      api.adminCheck().then(() => setIsAdmin(true)).catch(() => {});
+    }
+  }, [user]);
 
   useEffect(() => {
     setMobileMenuOpen(false);
@@ -38,6 +46,7 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
     { href: '/audit', label: 'Audit' },
     { href: '/billing', label: 'Billing' },
     { href: '/settings', label: 'Settings' },
+    ...(isAdmin ? [{ href: '/admin', label: 'Admin' }] : []),
   ];
 
   return (
