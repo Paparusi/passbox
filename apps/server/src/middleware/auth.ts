@@ -73,7 +73,7 @@ export const authMiddleware = createMiddleware<AuthEnv>(async (c, next) => {
       const perms = serviceToken.permissions as string[];
       if (method === 'GET' && !perms.includes('read')) throw Errors.forbidden();
       if ((method === 'POST' || method === 'PUT') && !perms.includes('write')) throw Errors.forbidden();
-      if (method === 'DELETE' && !perms.includes('write')) throw Errors.forbidden();
+      if (method === 'DELETE' && !perms.includes('delete')) throw Errors.forbidden();
     }
 
     return next();

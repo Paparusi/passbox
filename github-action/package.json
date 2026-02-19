@@ -1,0 +1,19 @@
+{
+  "name": "@pabox/github-action",
+  "version": "0.1.0",
+  "private": true,
+  "description": "GitHub Action to inject PassBox secrets into CI/CD pipelines",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsup src/index.ts --format esm --target node20 --out-dir dist --no-splitting --minify",
+    "dev": "tsup src/index.ts --format esm --target node20 --out-dir dist --watch"
+  },
+  "dependencies": {
+    "@actions/core": "^1.10.1",
+    "@pabox/sdk": "workspace:*"
+  },
+  "devDependencies": {
+    "tsup": "^8.5.1",
+    "typescript": "^5.7.3"
+  }
+}

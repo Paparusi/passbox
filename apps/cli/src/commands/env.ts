@@ -11,6 +11,7 @@ envCommand
   .command('push <file>')
   .description('Import .env file into vault')
   .option('-v, --vault <vault>', 'Target vault')
+  .option('-e, --env <environment>', 'Target environment (e.g. development, staging, production)')
   .action(async (file: string, options) => {
     try {
       if (!fs.existsSync(file)) {
@@ -21,7 +22,7 @@ envCommand
       const content = fs.readFileSync(file, 'utf-8');
       const spinner = ora('Importing secrets...').start();
       const pb = getClient();
-      const result = await pb.env.import(content, { vault: options.vault });
+      const result = await pb.env.import(content, { vault: options.vault, env: options.env });
       spinner.succeed(`Imported ${result.created + result.updated} secrets from ${file}`);
     } catch (err: any) {
       printError(err.message);
@@ -33,12 +34,13 @@ envCommand
   .command('pull')
   .description('Export vault secrets as .env')
   .option('-v, --vault <vault>', 'Source vault')
+  .option('-e, --env <environment>', 'Source environment (e.g. development, staging, production)')
   .option('-o, --output <file>', 'Output file (default: stdout)')
   .action(async (options) => {
     try {
       const pb = getClient();
       const spinner = ora('Exporting secrets...').start();
-      const envContent = await pb.env.export({ vault: options.vault });
+      const envContent = await pb.env.export({ vault: options.vault, env: options.env });
       spinner.stop();
 
       if (options.output) {

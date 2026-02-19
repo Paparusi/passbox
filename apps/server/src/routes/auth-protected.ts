@@ -112,8 +112,15 @@ authProtected.post('/setup-keys', async (c) => {
 });
 
 // ─── Change Password ─────────────────────────────────
+const passwordSchema = z.string()
+  .min(8, 'Password must be at least 8 characters')
+  .max(128, 'Password must be at most 128 characters')
+  .refine(p => /[a-z]/.test(p), 'Password must contain a lowercase letter')
+  .refine(p => /[A-Z]/.test(p), 'Password must contain an uppercase letter')
+  .refine(p => /[0-9]/.test(p), 'Password must contain a number');
+
 const changePasswordSchema = z.object({
-  newPassword: z.string().min(8).max(128),
+  newPassword: passwordSchema,
   encryptedPrivateKey: z.string().max(10_000),
   encryptedMasterKeyRecovery: z.string().max(10_000),
   keyDerivationSalt: z.string().max(1_000),

@@ -3,19 +3,60 @@ import { getSupabaseAdmin } from '../lib/supabase.js';
 
 const webhook = new Hono();
 
+// ─── Stripe signature verification ───────────────
+async function verifyStripeSignature(body: string, sigHeader: string, secret: string): Promise<boolean> {
+  const parts = sigHeader.split(',');
+  const timestamp = parts.find(p => p.startsWith('t='))?.slice(2);
+  const signature = parts.find(p => p.startsWith('v1='))?.slice(3);
+
+  if (!timestamp || !signature) return false;
+
+  // Reject if timestamp is older than 5 minutes (replay protection)
+  const age = Math.floor(Date.now() / 1000) - parseInt(timestamp, 10);
+  if (isNaN(age) || age > 300) return false;
+
+  const encoder = new TextEncoder();
+  const key = await crypto.subtle.importKey(
+    'raw',
+    encoder.encode(secret),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign'],
+  );
+  const signed = await crypto.subtle.sign('HMAC', key, encoder.encode(`${timestamp}.${body}`));
+  const expected = Array.from(new Uint8Array(signed))
+    .map(b => b.toString(16).padStart(2, '0'))
+    .join('');
+
+  // Constant-time comparison
+  if (expected.length !== signature.length) return false;
+  let mismatch = 0;
+  for (let i = 0; i < expected.length; i++) {
+    mismatch |= expected.charCodeAt(i) ^ signature.charCodeAt(i);
+  }
+  return mismatch === 0;
+}
+
 // ─── Stripe Webhook ──────────────────────────────
 webhook.post('/stripe', async (c) => {
-  const stripeKey = process.env.STRIPE_SECRET_KEY;
   const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
 
-  if (!stripeKey) {
-    return c.json({ error: 'Stripe not configured' }, 500);
+  if (!webhookSecret) {
+    return c.json({ error: 'Stripe webhook not configured' }, 500);
   }
 
   const body = await c.req.text();
+  const sigHeader = c.req.header('stripe-signature');
 
-  // In production, verify webhook signature with webhookSecret
-  // For now, parse the event directly
+  if (!sigHeader) {
+    return c.json({ error: 'Missing stripe-signature header' }, 400);
+  }
+
+  const valid = await verifyStripeSignature(body, sigHeader, webhookSecret);
+  if (!valid) {
+    return c.json({ error: 'Invalid signature' }, 401);
+  }
+
   let event: any;
   try {
     event = JSON.parse(body);

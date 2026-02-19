@@ -6,11 +6,12 @@ export const listCommand = new Command('list')
   .alias('ls')
   .description('List secrets in a vault')
   .option('-v, --vault <vault>', 'Vault name or ID')
+  .option('-e, --env <environment>', 'Environment name (e.g. development, staging, production)')
   .option('-f, --format <format>', 'Output format (table, json)', 'table')
   .action(async (options) => {
     try {
       const pb = getClient();
-      const secrets = await pb.secrets.list({ vault: options.vault });
+      const secrets = await pb.secrets.list({ vault: options.vault, env: options.env });
 
       if (options.format === 'json') {
         console.log(JSON.stringify(secrets, null, 2));

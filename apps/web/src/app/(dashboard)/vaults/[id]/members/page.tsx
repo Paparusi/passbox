@@ -9,6 +9,13 @@ import { useToast } from '@/components/ui/toast';
 import { useConfirm } from '@/components/ui/confirm';
 import { useAuth } from '@/lib/auth';
 import { api } from '@/lib/api';
+import {
+  decryptBytes,
+  decryptVaultKey,
+  shareVaultKeyForUser,
+  fromBase64,
+  type EncryptedBlob,
+} from '@/lib/crypto';
 
 interface Member {
   id: string;
@@ -44,7 +51,7 @@ export default function VaultMembersPage() {
   const vaultId = params.id as string;
   const { toast } = useToast();
   const { confirm } = useConfirm();
-  const { user } = useAuth();
+  const { user, masterKey, requestUnlock } = useAuth();
 
   const [vault, setVault] = useState<Vault | null>(null);
   const [members, setMembers] = useState<Member[]>([]);
@@ -82,9 +89,41 @@ export default function VaultMembersPage() {
     setInviting(true);
 
     try {
-      // For now, use a placeholder encrypted vault key
-      // Full sharing requires X25519 key exchange with the target user's public key
-      await api.addVaultMember(vaultId, inviteEmail, inviteRole, 'shared_key_placeholder');
+      // Ensure vault is unlocked
+      let mk = masterKey;
+      if (!mk) {
+        mk = await requestUnlock();
+        if (!mk) {
+          toast('Unlock vault first to invite members', 'error');
+          setInviting(false);
+          return;
+        }
+      }
+
+      // 1. Get our keys from server
+      const token = sessionStorage.getItem('passbox_token');
+      if (!token) throw new Error('Not authenticated');
+      const ourKeys = await api.getKeys(token);
+      if (!ourKeys) throw new Error('Could not load your encryption keys');
+
+      // 2. Decrypt our private key
+      const encPrivKey: EncryptedBlob = JSON.parse(ourKeys.encryptedPrivateKey);
+      const ourPrivateKey = decryptBytes(encPrivKey, mk);
+
+      // 3. Get vault data to decrypt vault key
+      const vaultData = await api.getVault(vaultId);
+      if (!vaultData.encryptedVaultKey) throw new Error('Vault key not available');
+      const encVaultKey: EncryptedBlob = JSON.parse(vaultData.encryptedVaultKey);
+      const vaultKey = decryptVaultKey(encVaultKey, mk);
+
+      // 4. Get target user's public key
+      const { publicKey: targetPubKeyStr } = await api.getUserPublicKey(inviteEmail);
+      const targetPublicKey = fromBase64(targetPubKeyStr);
+
+      // 5. Encrypt vault key for target using X25519 key exchange
+      const sharedKey = shareVaultKeyForUser(vaultKey, ourPrivateKey, targetPublicKey, ourKeys.publicKey);
+
+      await api.addVaultMember(vaultId, inviteEmail, inviteRole, JSON.stringify(sharedKey));
       setShowInvite(false);
       setInviteEmail('');
       setInviteRole('member');

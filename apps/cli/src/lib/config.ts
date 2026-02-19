@@ -10,6 +10,7 @@ const PROJECT_FILE = '.passbox.json';
 export interface GlobalConfig {
   server: string;
   defaultVault?: string;
+  defaultEnvironment?: string;
 }
 
 export interface AuthData {
@@ -22,6 +23,7 @@ export interface AuthData {
 
 export interface ProjectConfig {
   vault?: string;
+  environment?: string;
   server?: string;
 }
 

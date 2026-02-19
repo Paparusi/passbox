@@ -191,3 +191,35 @@ export function decryptMasterKeyWithRecovery(
   const recoveryKeyBytes = fromBase64(recoveryKey);
   return decryptBytes(encryptedMasterKey, recoveryKeyBytes);
 }
+
+// ─── Vault Sharing (X25519 Key Exchange) ─────────
+
+export interface SharedVaultKey {
+  type: 'shared';
+  granterPublicKey: string;
+  blob: EncryptedBlob;
+}
+
+/** Encrypt a vault key for another user using X25519 ECDH + HKDF */
+export function shareVaultKeyForUser(
+  vaultKey: Uint8Array,
+  ourPrivateKey: Uint8Array,
+  theirPublicKey: Uint8Array,
+  ourPublicKeyBase64: string,
+): SharedVaultKey {
+  const sharedSecret = x25519.getSharedSecret(ourPrivateKey, theirPublicKey);
+  const encKey = hkdf(sha256, sharedSecret, undefined, new TextEncoder().encode('passbox-vault-share'), 32);
+  const blob = encryptBytes(vaultKey, encKey);
+  return { type: 'shared', granterPublicKey: ourPublicKeyBase64, blob };
+}
+
+/** Decrypt a shared vault key using X25519 ECDH + HKDF */
+export function decryptSharedVaultKey(
+  shared: SharedVaultKey,
+  ourPrivateKey: Uint8Array,
+): Uint8Array {
+  const theirPublicKey = fromBase64(shared.granterPublicKey);
+  const sharedSecret = x25519.getSharedSecret(ourPrivateKey, theirPublicKey);
+  const encKey = hkdf(sha256, sharedSecret, undefined, new TextEncoder().encode('passbox-vault-share'), 32);
+  return decryptBytes(shared.blob, encKey);
+}

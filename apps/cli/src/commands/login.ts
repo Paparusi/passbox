@@ -1,6 +1,5 @@
 import { Command } from 'commander';
 import ora from 'ora';
-import { PassBox } from '@pabox/sdk';
 import { saveAuth, getServerUrl } from '../lib/config.js';
 import { printSuccess, printError } from '../lib/output.js';
 import * as readline from 'node:readline';
@@ -70,14 +69,6 @@ export const loginCommand = new Command('login')
 
       const spinner = ora('Logging in...').start();
 
-      const pb = await PassBox.login({
-        serverUrl,
-        email,
-        password,
-      });
-
-      // Save session (we need to extract tokens from the client)
-      // For now, we'll do a direct HTTP request
       const res = await fetch(`${serverUrl}/api/v1/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

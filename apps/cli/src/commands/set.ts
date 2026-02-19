@@ -8,6 +8,7 @@ export const setCommand = new Command('set')
   .argument('<name>', 'Secret name')
   .argument('[value]', 'Secret value (or use --from-stdin)')
   .option('-v, --vault <vault>', 'Vault name or ID')
+  .option('-e, --env <environment>', 'Environment name (e.g. development, staging, production)')
   .option('--from-stdin', 'Read value from stdin')
   .option('-d, --description <desc>', 'Secret description')
   .option('-t, --tags <tags>', 'Comma-separated tags')
@@ -34,6 +35,7 @@ export const setCommand = new Command('set')
 
       await pb.secrets.set(name, secretValue, {
         vault: options.vault,
+        env: options.env,
         description: options.description,
         tags: options.tags?.split(',').map((t: string) => t.trim()),
       });

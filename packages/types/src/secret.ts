@@ -12,6 +12,7 @@ export interface EncryptedBlob {
 export interface Secret {
   id: string;
   vaultId: string;
+  environmentId: string;
   name: string;
   encryptedValue: EncryptedBlob;
   description?: string;

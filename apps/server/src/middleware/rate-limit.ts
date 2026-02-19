@@ -17,10 +17,11 @@ setInterval(() => {
 }, 5 * 60 * 1000);
 
 function getClientIp(c: any): string {
+  // In production behind a trusted proxy (Railway), x-forwarded-for is reliable
   return (
     c.req.header('x-forwarded-for')?.split(',')[0]?.trim() ||
     c.req.header('x-real-ip') ||
-    'unknown'
+    'no-ip'
   );
 }
 

@@ -15,7 +15,9 @@ import {
 import { HttpClient, type ClientConfig } from './client.js';
 import { VaultsResource } from './resources/vaults.js';
 import { SecretsResource } from './resources/secrets.js';
+import { EnvironmentsResource } from './resources/environments.js';
 import { EnvResource } from './resources/env.js';
+import { ImportersResource } from './resources/importers.js';
 
 export interface PassBoxConfig {
   /** Server URL (default: https://api.passbox.dev) */
@@ -44,7 +46,9 @@ export class PassBox {
 
   public vaults: VaultsResource;
   public secrets: SecretsResource;
+  public environments: EnvironmentsResource;
   public env: EnvResource;
+  public importers: ImportersResource;
 
   constructor(config: PassBoxConfig) {
     this.client = new HttpClient({
@@ -53,13 +57,19 @@ export class PassBox {
     });
 
     this.vaults = new VaultsResource(this.client, () => this.masterKey);
+    this.environments = new EnvironmentsResource(
+      this.client,
+      (nameOrId) => this.resolveVaultId(nameOrId),
+    );
     this.secrets = new SecretsResource(
       this.client,
       () => this.masterKey,
       (nameOrId) => this.resolveVaultId(nameOrId),
       (vaultId) => this.getVaultKey(vaultId),
+      (envName, options) => this.environments.resolve(envName, options),
     );
     this.env = new EnvResource(this.secrets);
+    this.importers = new ImportersResource(this.secrets, this.env);
   }
 
   /**
@@ -146,6 +156,18 @@ export class PassBox {
   }
 
   /**
+   * Make a raw authenticated API request. Path is relative to /api/v1.
+   */
+  async request<T = any>(path: string, options?: { method?: string; body?: unknown }): Promise<T> {
+    const method = options?.method || 'GET';
+    if (method === 'GET') return this.client.get<T>(path);
+    if (method === 'POST') return this.client.post<T>(path, options?.body);
+    if (method === 'PUT') return this.client.put<T>(path, options?.body);
+    if (method === 'DELETE') return this.client.delete<T>(path);
+    return this.client.post<T>(path, options?.body);
+  }
+
+  /**
    * Resolve vault name or ID to a vault ID.
    */
   private async resolveVaultId(nameOrId?: string): Promise<string> {
@@ -198,4 +220,6 @@ export class PassBox {
 // Re-export types
 export type { VaultData, CreateVaultOptions } from './resources/vaults.js';
 export type { SecretData, GetSecretOptions, SetSecretOptions } from './resources/secrets.js';
+export type { EnvironmentData, CreateEnvironmentOptions, CloneEnvironmentOptions } from './resources/environments.js';
 export type { EnvImportOptions } from './resources/env.js';
+export type { ImportResult, ImportOptions } from './resources/importers.js';

@@ -124,19 +124,50 @@ class ApiClient {
     return this.request<any>(`/vaults/${id}`, { method: 'DELETE' });
   }
 
+  // Environments
+  async getEnvironments(vaultId: string) {
+    return this.request<any[]>(`/vaults/${vaultId}/environments`);
+  }
+
+  async createEnvironment(vaultId: string, name: string, description?: string) {
+    return this.request<any>(`/vaults/${vaultId}/environments`, {
+      method: 'POST',
+      body: JSON.stringify({ name, description }),
+    });
+  }
+
+  async updateEnvironment(vaultId: string, envId: string, data: { name?: string; description?: string }) {
+    return this.request<any>(`/vaults/${vaultId}/environments/${envId}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteEnvironment(vaultId: string, envId: string) {
+    return this.request<any>(`/vaults/${vaultId}/environments/${envId}`, { method: 'DELETE' });
+  }
+
+  async cloneEnvironment(vaultId: string, targetEnvId: string, fromEnvId: string) {
+    return this.request<{ created: number }>(`/vaults/${vaultId}/environments/${targetEnvId}/clone`, {
+      method: 'POST',
+      body: JSON.stringify({ fromEnvironmentId: fromEnvId }),
+    });
+  }
+
   // Secrets
-  async getSecrets(vaultId: string) {
-    return this.request<any[]>(`/vaults/${vaultId}/secrets`);
+  async getSecrets(vaultId: string, environmentId?: string) {
+    const query = environmentId ? `?environmentId=${environmentId}` : '';
+    return this.request<any[]>(`/vaults/${vaultId}/secrets${query}`);
   }
 
   async getSecret(vaultId: string, name: string) {
     return this.request<any>(`/vaults/${vaultId}/secrets/${name}`);
   }
 
-  async createSecret(vaultId: string, name: string, encryptedValue: any, description?: string, tags?: string[]) {
+  async createSecret(vaultId: string, name: string, encryptedValue: any, description?: string, tags?: string[], environmentId?: string) {
     return this.request<any>(`/vaults/${vaultId}/secrets`, {
       method: 'POST',
-      body: JSON.stringify({ name, encryptedValue, description, tags }),
+      body: JSON.stringify({ name, encryptedValue, description, tags, environmentId }),
     });
   }
 
@@ -215,6 +246,53 @@ class ApiClient {
     return this.request<{ url: string }>('/billing/portal', {
       method: 'POST',
     });
+  }
+
+  // Webhooks
+  async getWebhooks(vaultId: string) {
+    return this.request<any[]>(`/vaults/${vaultId}/webhooks`);
+  }
+
+  async createWebhook(vaultId: string, name: string, url: string, events: string[]) {
+    return this.request<any>(`/vaults/${vaultId}/webhooks`, {
+      method: 'POST',
+      body: JSON.stringify({ name, url, events }),
+    });
+  }
+
+  async updateWebhook(vaultId: string, webhookId: string, data: { name?: string; url?: string; events?: string[]; active?: boolean }) {
+    return this.request<any>(`/vaults/${vaultId}/webhooks/${webhookId}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteWebhook(vaultId: string, webhookId: string) {
+    return this.request<any>(`/vaults/${vaultId}/webhooks/${webhookId}`, { method: 'DELETE' });
+  }
+
+  async testWebhook(vaultId: string, webhookId: string) {
+    return this.request<any>(`/vaults/${vaultId}/webhooks/${webhookId}/test`, { method: 'POST' });
+  }
+
+  // Rotation
+  async getRotationConfig(vaultId: string, secretName: string) {
+    return this.request<any>(`/vaults/${vaultId}/secrets/${encodeURIComponent(secretName)}/rotation`);
+  }
+
+  async setRotationConfig(vaultId: string, secretName: string, config: { intervalHours: number; webhookId?: string; enabled?: boolean }) {
+    return this.request<any>(`/vaults/${vaultId}/secrets/${encodeURIComponent(secretName)}/rotation`, {
+      method: 'PUT',
+      body: JSON.stringify(config),
+    });
+  }
+
+  async deleteRotationConfig(vaultId: string, secretName: string) {
+    return this.request<any>(`/vaults/${vaultId}/secrets/${encodeURIComponent(secretName)}/rotation`, { method: 'DELETE' });
+  }
+
+  async rotateSecret(vaultId: string, secretName: string) {
+    return this.request<any>(`/vaults/${vaultId}/secrets/${encodeURIComponent(secretName)}/rotate`, { method: 'POST' });
   }
 
   // OAuth: Get user encryption keys (with explicit token)

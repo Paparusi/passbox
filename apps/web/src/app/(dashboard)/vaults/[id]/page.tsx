@@ -11,9 +11,13 @@ import { useAuth } from '@/lib/auth';
 import { api } from '@/lib/api';
 import {
   decryptVaultKey,
+  decryptSharedVaultKey,
+  decryptBytes,
   encryptSecret,
   decryptSecret,
+  fromBase64,
   type EncryptedBlob,
+  type SharedVaultKey,
 } from '@/lib/crypto';
 
 interface Vault {
@@ -27,11 +31,20 @@ interface Secret {
   id: string;
   name: string;
   encrypted_value: string;
+  environment_id?: string;
   description: string | null;
   tags: string[];
   version: number;
   created_at: string;
   updated_at: string;
+}
+
+interface Environment {
+  id: string;
+  name: string;
+  description: string | null;
+  is_default: boolean;
+  created_at: string;
 }
 
 export default function VaultDetailPage() {
@@ -44,11 +57,19 @@ export default function VaultDetailPage() {
 
   const [vault, setVault] = useState<Vault | null>(null);
   const [secrets, setSecrets] = useState<Secret[]>([]);
+  const [environments, setEnvironments] = useState<Environment[]>([]);
+  const [selectedEnvId, setSelectedEnvId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
 
+  // Environment management modal
+  const [showEnvModal, setShowEnvModal] = useState(false);
+  const [newEnvName, setNewEnvName] = useState('');
+  const [creatingEnv, setCreatingEnv] = useState(false);
+
   // Vault key (decrypted, held in memory)
   const vaultKeyRef = useRef<Uint8Array | null>(null);
+  const privateKeyRef = useRef<Uint8Array | null>(null);
 
   // Create modal
   const [showCreate, setShowCreate] = useState(false);
@@ -65,6 +86,12 @@ export default function VaultDetailPage() {
   const [revealed, setRevealed] = useState<Set<string>>(new Set());
   const [copied, setCopied] = useState<string | null>(null);
 
+  // Import modal
+  const [showImport, setShowImport] = useState(false);
+  const [importText, setImportText] = useState('');
+  const [importFormat, setImportFormat] = useState<'env' | 'json' | 'csv'>('env');
+  const [importing, setImporting] = useState(false);
+
   // Delete state
   const [deleting, setDeleting] = useState<string | null>(null);
 
@@ -73,13 +100,41 @@ export default function VaultDetailPage() {
   const [versions, setVersions] = useState<any[]>([]);
   const [loadingVersions, setLoadingVersions] = useState(false);
 
+  // Ensure we have the user's private key (for shared vault decryption)
+  async function ensurePrivateKey(): Promise<Uint8Array | null> {
+    if (privateKeyRef.current) return privateKeyRef.current;
+    if (!masterKey) return null;
+    try {
+      const token = sessionStorage.getItem('passbox_token');
+      if (!token) return null;
+      const keys = await api.getKeys(token);
+      if (!keys) return null;
+      const encPrivKey: EncryptedBlob = JSON.parse(keys.encryptedPrivateKey);
+      const pk = decryptBytes(encPrivKey, masterKey);
+      privateKeyRef.current = pk;
+      return pk;
+    } catch {
+      return null;
+    }
+  }
+
   function getVaultKey(vaultData: Vault): Uint8Array | null {
     if (vaultKeyRef.current) return vaultKeyRef.current;
     if (!masterKey || !vaultData.encryptedVaultKey) return null;
 
     try {
-      const encryptedVaultKey: EncryptedBlob = JSON.parse(vaultData.encryptedVaultKey);
-      const vaultKey = decryptVaultKey(encryptedVaultKey, masterKey);
+      const parsed = JSON.parse(vaultData.encryptedVaultKey);
+
+      if (parsed.type === 'shared') {
+        // Shared vault: decrypt using X25519 key exchange
+        if (!privateKeyRef.current) return null;
+        const vaultKey = decryptSharedVaultKey(parsed as SharedVaultKey, privateKeyRef.current);
+        vaultKeyRef.current = vaultKey;
+        return vaultKey;
+      }
+
+      // Own vault: decrypt directly with master key
+      const vaultKey = decryptVaultKey(parsed as EncryptedBlob, masterKey);
       vaultKeyRef.current = vaultKey;
       return vaultKey;
     } catch {
@@ -87,13 +142,20 @@ export default function VaultDetailPage() {
     }
   }
 
-  async function loadData() {
+  async function loadData(envId?: string | null) {
     try {
-      const [vaultData, secretsData] = await Promise.all([
+      const [vaultData, envsData] = await Promise.all([
         api.getVault(vaultId),
-        api.getSecrets(vaultId),
+        api.getEnvironments(vaultId),
       ]);
       setVault(vaultData);
+      setEnvironments(envsData || []);
+
+      // Select default environment on first load
+      const activeEnvId = envId ?? selectedEnvId ?? envsData?.find((e: Environment) => e.is_default)?.id ?? null;
+      if (activeEnvId && !selectedEnvId) setSelectedEnvId(activeEnvId);
+
+      const secretsData = await api.getSecrets(vaultId, activeEnvId || undefined);
       setSecrets(secretsData || []);
     } catch (err: any) {
       toast(err.message || 'Failed to load vault', 'error');
@@ -102,10 +164,28 @@ export default function VaultDetailPage() {
     }
   }
 
+  async function loadSecrets(envId: string) {
+    try {
+      const secretsData = await api.getSecrets(vaultId, envId);
+      setSecrets(secretsData || []);
+    } catch (err: any) {
+      toast(err.message || 'Failed to load secrets', 'error');
+    }
+  }
+
+  function handleEnvChange(envId: string) {
+    setSelectedEnvId(envId);
+    setSearch('');
+    setRevealed(new Set());
+    loadSecrets(envId);
+  }
+
   useEffect(() => {
     vaultKeyRef.current = null;
-    loadData();
-  }, [vaultId]);
+    privateKeyRef.current = null;
+    // Load private key for shared vault support, then load data
+    ensurePrivateKey().then(() => loadData());
+  }, [vaultId, masterKey]);
 
   const filteredSecrets = secrets.filter(s =>
     s.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -117,28 +197,30 @@ export default function VaultDetailPage() {
     setSaving(true);
 
     try {
-      const vaultKey = vault ? getVaultKey(vault) : null;
-      let encryptedValue: any;
-
-      if (vaultKey) {
-        encryptedValue = encryptSecret(newValue, vaultKey);
-      } else {
-        // Fallback if no vault key (legacy accounts without crypto)
-        encryptedValue = JSON.stringify({
-          ciphertext: btoa(newValue),
-          iv: crypto.getRandomValues(new Uint8Array(12)).toString(),
-          tag: 'placeholder',
-          algorithm: 'aes-256-gcm',
-        });
+      let vaultKey = vault ? getVaultKey(vault) : null;
+      if (!vaultKey) {
+        const mk = await requestUnlock();
+        if (!mk || !vault) {
+          toast('Unlock vault first to create secrets', 'error');
+          setSaving(false);
+          return;
+        }
+        vaultKey = getVaultKey(vault);
+        if (!vaultKey) {
+          toast('Failed to decrypt vault key', 'error');
+          setSaving(false);
+          return;
+        }
       }
 
-      await api.createSecret(vaultId, newName, encryptedValue, newDesc || undefined);
+      const encryptedValue = encryptSecret(newValue, vaultKey);
+      await api.createSecret(vaultId, newName, encryptedValue, newDesc || undefined, undefined, selectedEnvId || undefined);
       setShowCreate(false);
       setNewName('');
       setNewValue('');
       setNewDesc('');
       toast('Secret created', 'success');
-      await loadData();
+      if (selectedEnvId) await loadSecrets(selectedEnvId); else await loadData();
     } catch (err: any) {
       toast(err.message || 'Failed to create secret', 'error');
     } finally {
@@ -152,20 +234,23 @@ export default function VaultDetailPage() {
     setSaving(true);
 
     try {
-      const vaultKey = vault ? getVaultKey(vault) : null;
-      let encryptedValue: any;
-
-      if (vaultKey) {
-        encryptedValue = encryptSecret(editValue, vaultKey);
-      } else {
-        encryptedValue = JSON.stringify({
-          ciphertext: btoa(editValue),
-          iv: crypto.getRandomValues(new Uint8Array(12)).toString(),
-          tag: 'placeholder',
-          algorithm: 'aes-256-gcm',
-        });
+      let vaultKey = vault ? getVaultKey(vault) : null;
+      if (!vaultKey) {
+        const mk = await requestUnlock();
+        if (!mk || !vault) {
+          toast('Unlock vault first to update secrets', 'error');
+          setSaving(false);
+          return;
+        }
+        vaultKey = getVaultKey(vault);
+        if (!vaultKey) {
+          toast('Failed to decrypt vault key', 'error');
+          setSaving(false);
+          return;
+        }
       }
 
+      const encryptedValue = encryptSecret(editValue, vaultKey);
       await api.updateSecret(vaultId, editSecret.name, encryptedValue);
       setEditSecret(null);
       setEditValue('');
@@ -196,6 +281,92 @@ export default function VaultDetailPage() {
       toast(err.message || 'Failed to delete secret', 'error');
     } finally {
       setDeleting(null);
+    }
+  }
+
+  async function handleImport(e: React.FormEvent) {
+    e.preventDefault();
+    if (!importText.trim()) return;
+    setImporting(true);
+
+    try {
+      const vaultKey = vault ? getVaultKey(vault) : null;
+      if (!vaultKey) {
+        toast('Unlock vault first to import secrets', 'error');
+        return;
+      }
+
+      // Parse the input based on format
+      let entries: Record<string, string> = {};
+
+      if (importFormat === 'json') {
+        const parsed = JSON.parse(importText);
+        if (Array.isArray(parsed)) {
+          for (const item of parsed) {
+            if (item.name && item.value !== undefined) entries[item.name] = String(item.value);
+          }
+        } else {
+          entries = Object.fromEntries(Object.entries(parsed).map(([k, v]) => [k, String(v)]));
+        }
+      } else if (importFormat === 'csv') {
+        const lines = importText.split('\n').map(l => l.trim()).filter(l => l);
+        if (lines.length >= 2) {
+          const header = lines[0].toLowerCase().split(',').map(h => h.trim());
+          const ni = header.indexOf('name');
+          const vi = header.indexOf('value');
+          if (ni !== -1 && vi !== -1) {
+            for (let i = 1; i < lines.length; i++) {
+              const cols = lines[i].split(',');
+              if (cols[ni] && cols[vi]) entries[cols[ni].trim()] = cols[vi].trim();
+            }
+          }
+        }
+      } else {
+        // .env format
+        for (const line of importText.split('\n')) {
+          const trimmed = line.trim();
+          if (!trimmed || trimmed.startsWith('#')) continue;
+          const eq = trimmed.indexOf('=');
+          if (eq === -1) continue;
+          const key = trimmed.slice(0, eq).trim();
+          let val = trimmed.slice(eq + 1).trim();
+          if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
+            val = val.slice(1, -1);
+          }
+          entries[key] = val;
+        }
+      }
+
+      const entryCount = Object.keys(entries).length;
+      if (entryCount === 0) {
+        toast('No secrets found in input', 'error');
+        return;
+      }
+
+      let created = 0;
+      for (const [name, value] of Object.entries(entries)) {
+        try {
+          const encryptedValue = encryptSecret(value, vaultKey);
+          await api.createSecret(vaultId, name, encryptedValue, undefined, undefined, selectedEnvId || undefined);
+          created++;
+        } catch {
+          // Try update on conflict
+          try {
+            const encryptedValue = encryptSecret(value, vaultKey);
+            await api.updateSecret(vaultId, name, encryptedValue);
+            created++;
+          } catch { /* skip */ }
+        }
+      }
+
+      setShowImport(false);
+      setImportText('');
+      toast(`Imported ${created} secrets`, 'success');
+      if (selectedEnvId) await loadSecrets(selectedEnvId); else await loadData();
+    } catch (err: any) {
+      toast(err.message || 'Import failed', 'error');
+    } finally {
+      setImporting(false);
     }
   }
 
@@ -274,9 +445,13 @@ export default function VaultDetailPage() {
           )}
         </div>
         <div className="flex items-center gap-2">
+          <Button variant="ghost" onClick={() => router.push(`/vaults/${vaultId}/webhooks`)}>
+            Webhooks
+          </Button>
           <Button variant="ghost" onClick={() => router.push(`/vaults/${vaultId}/members`)}>
             Members
           </Button>
+          <Button variant="ghost" onClick={() => setShowImport(true)}>Import</Button>
           <Button onClick={() => setShowCreate(true)}>+ Add Secret</Button>
         </div>
       </div>
@@ -290,6 +465,33 @@ export default function VaultDetailPage() {
             className="shrink-0 px-3 h-8 text-xs font-medium rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
           >
             Unlock
+          </button>
+        </div>
+      )}
+
+      {/* Environment selector */}
+      {environments.length > 0 && (
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex items-center gap-1 rounded-lg border border-border bg-muted p-1">
+            {environments.map((env) => (
+              <button
+                key={env.id}
+                onClick={() => handleEnvChange(env.id)}
+                className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                  selectedEnvId === env.id
+                    ? 'bg-primary text-primary-foreground'
+                    : 'text-muted-foreground hover:text-foreground hover:bg-background'
+                }`}
+              >
+                {env.name}
+              </button>
+            ))}
+          </div>
+          <button
+            onClick={() => setShowEnvModal(true)}
+            className="text-xs text-muted-foreground hover:text-foreground transition-colors px-2 py-1"
+          >
+            Manage
           </button>
         </div>
       )}
@@ -548,6 +750,131 @@ export default function VaultDetailPage() {
             </Button>
           </div>
         </form>
+      </Modal>
+
+      {/* Import Modal */}
+      <Modal open={showImport} onClose={() => setShowImport(false)} title="Import Secrets">
+        <form onSubmit={handleImport} className="space-y-4">
+          <div className="flex gap-2">
+            {(['env', 'json', 'csv'] as const).map((fmt) => (
+              <button
+                key={fmt}
+                type="button"
+                onClick={() => setImportFormat(fmt)}
+                className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                  importFormat === fmt
+                    ? 'bg-primary text-primary-foreground'
+                    : 'bg-muted text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                .{fmt}
+              </button>
+            ))}
+          </div>
+          <div className="space-y-1.5">
+            <label htmlFor="import-text" className="block text-sm font-medium text-muted-foreground">
+              Paste your {importFormat === 'env' ? '.env' : importFormat.toUpperCase()} content
+            </label>
+            <textarea
+              id="import-text"
+              rows={8}
+              placeholder={
+                importFormat === 'env' ? 'DATABASE_URL=postgres://...\nAPI_KEY=sk-...\nSECRET=value' :
+                importFormat === 'json' ? '{\n  "DATABASE_URL": "postgres://...",\n  "API_KEY": "sk-..."\n}' :
+                'name,value\nDATABASE_URL,postgres://...\nAPI_KEY,sk-...'
+              }
+              value={importText}
+              onChange={(e) => setImportText(e.target.value)}
+              required
+              className="flex w-full rounded-lg border border-border bg-muted px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-colors font-mono resize-none"
+            />
+          </div>
+          <div className="flex gap-3 justify-end">
+            <Button type="button" variant="ghost" onClick={() => setShowImport(false)}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={importing || !importText.trim()}>
+              {importing ? 'Importing...' : 'Import'}
+            </Button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Environment Management Modal */}
+      <Modal open={showEnvModal} onClose={() => setShowEnvModal(false)} title="Manage Environments">
+        <div className="space-y-4">
+          <div className="space-y-2">
+            {environments.map((env) => (
+              <div key={env.id} className="flex items-center justify-between border border-border rounded-lg p-3">
+                <div>
+                  <span className="text-sm font-medium">{env.name}</span>
+                  {env.is_default && (
+                    <span className="ml-2 text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded">default</span>
+                  )}
+                  {env.description && (
+                    <p className="text-xs text-muted-foreground mt-0.5">{env.description}</p>
+                  )}
+                </div>
+                {!env.is_default && (
+                  <button
+                    onClick={async () => {
+                      const ok = await confirm({
+                        title: 'Delete Environment',
+                        message: `Delete "${env.name}"? All secrets in this environment will be lost.`,
+                        confirmLabel: 'Delete',
+                        destructive: true,
+                      });
+                      if (!ok) return;
+                      try {
+                        await api.deleteEnvironment(vaultId, env.id);
+                        toast(`Environment "${env.name}" deleted`, 'success');
+                        if (selectedEnvId === env.id) {
+                          const defaultEnv = environments.find(e => e.is_default);
+                          if (defaultEnv) handleEnvChange(defaultEnv.id);
+                        }
+                        await loadData(selectedEnvId);
+                      } catch (err: any) {
+                        toast(err.message || 'Failed to delete', 'error');
+                      }
+                    }}
+                    className="text-xs text-muted-foreground hover:text-destructive transition-colors"
+                  >
+                    Delete
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+          <form
+            onSubmit={async (e) => {
+              e.preventDefault();
+              if (!newEnvName.trim()) return;
+              setCreatingEnv(true);
+              try {
+                await api.createEnvironment(vaultId, newEnvName.toLowerCase().replace(/[^a-z0-9_-]/g, '-'));
+                setNewEnvName('');
+                toast('Environment created', 'success');
+                await loadData(selectedEnvId);
+              } catch (err: any) {
+                toast(err.message || 'Failed to create', 'error');
+              } finally {
+                setCreatingEnv(false);
+              }
+            }}
+            className="flex gap-2"
+          >
+            <input
+              type="text"
+              placeholder="new-environment"
+              value={newEnvName}
+              onChange={(e) => setNewEnvName(e.target.value)}
+              className="flex-1 h-9 rounded-lg border border-border bg-muted px-3 text-sm outline-none focus:ring-2 focus:ring-ring"
+            />
+            <Button type="submit" disabled={creatingEnv || !newEnvName.trim()}>
+              {creatingEnv ? '...' : 'Create'}
+            </Button>
+          </form>
+        </div>
       </Modal>
 
       {/* Version History Modal */}

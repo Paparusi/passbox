@@ -1,0 +1,36 @@
+name: 'PassBox Secrets'
+description: 'Inject secrets from PassBox vault into your CI/CD pipeline'
+author: 'PassBox'
+branding:
+  icon: 'lock'
+  color: 'blue'
+
+inputs:
+  token:
+    required: true
+    description: 'PassBox service token (pb_...)'
+  vault:
+    required: false
+    description: 'Vault name or ID (uses default if omitted)'
+  environment:
+    required: false
+    default: ''
+    description: 'Environment name (e.g. development, staging, production)'
+  secrets:
+    required: false
+    description: 'Specific secrets to inject (comma-separated). Injects all if omitted.'
+  export-env:
+    required: false
+    default: 'true'
+    description: 'Export secrets as environment variables'
+  env-file:
+    required: false
+    description: 'Write secrets to a .env file at this path'
+  server:
+    required: false
+    default: 'https://api.passbox.dev'
+    description: 'PassBox server URL'
+
+runs:
+  using: 'node20'
+  main: 'dist/index.js'

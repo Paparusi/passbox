@@ -61,13 +61,32 @@ vaults.post('/', async (c) => {
   }
 
   // Add creator as owner member
-  await supabase.from('vault_members').insert({
+  const { error: memberError } = await supabase.from('vault_members').insert({
     vault_id: vault.id,
     user_id: userId,
     encrypted_vault_key: data.encryptedVaultKey,
     role: 'owner',
     granted_by: userId,
   });
+
+  if (memberError) {
+    // Rollback vault creation
+    await supabase.from('vaults').delete().eq('id', vault.id);
+    throw Errors.internal('Failed to create vault membership');
+  }
+
+  // Create default "development" environment
+  const { error: envError } = await supabase.from('environments').insert({
+    vault_id: vault.id,
+    name: 'development',
+    is_default: true,
+    created_by: userId,
+  });
+
+  if (envError) {
+    // Non-fatal: vault is still usable, environment can be created later
+    console.error('Failed to create default environment:', envError.message);
+  }
 
   return c.json({ success: true, data: vault }, 201);
 });
@@ -202,7 +221,11 @@ vaults.delete('/:id', async (c) => {
     throw Errors.forbidden();
   }
 
-  await supabase.from('vaults').delete().eq('id', vaultId);
+  const { error: deleteError } = await supabase.from('vaults').delete().eq('id', vaultId);
+
+  if (deleteError) {
+    throw Errors.internal('Failed to delete vault');
+  }
 
   return c.json({ success: true });
 });

@@ -10,6 +10,7 @@ export interface SecretData {
   id: string;
   name: string;
   encrypted_value: string;
+  environment_id?: string;
   tags: string[];
   version: number;
   created_at: string;
@@ -18,10 +19,12 @@ export interface SecretData {
 
 export interface GetSecretOptions {
   vault?: string;
+  env?: string;
 }
 
 export interface SetSecretOptions {
   vault?: string;
+  env?: string;
   description?: string;
   tags?: string[];
 }
@@ -32,6 +35,7 @@ export class SecretsResource {
     private getMasterKey: () => Uint8Array | null,
     private resolveVaultId: (nameOrId?: string) => Promise<string>,
     private getVaultKey: (vaultId: string) => Promise<Uint8Array>,
+    private resolveEnvId?: (name: string, options?: { vault?: string }) => Promise<string>,
   ) {}
 
   /**
@@ -41,8 +45,9 @@ export class SecretsResource {
     const vaultId = await this.resolveVaultId(options?.vault);
     const vaultKey = await this.getVaultKey(vaultId);
 
+    const envQuery = options?.env ? await this.buildEnvQuery(options.env, options.vault) : '';
     const secret = await this.client.get<SecretData>(
-      `/vaults/${vaultId}/secrets/${encodeURIComponent(name)}`,
+      `/vaults/${vaultId}/secrets/${encodeURIComponent(name)}${envQuery}`,
     );
 
     const blob: EncryptedBlob = JSON.parse(secret.encrypted_value);
@@ -57,6 +62,8 @@ export class SecretsResource {
     const vaultKey = await this.getVaultKey(vaultId);
     const encryptedValue = encryptSecret(value, vaultKey);
 
+    const environmentId = options?.env ? await this.getEnvId(options.env, options.vault) : undefined;
+
     try {
       // Try create first
       await this.client.post(`/vaults/${vaultId}/secrets`, {
@@ -64,13 +71,15 @@ export class SecretsResource {
         encryptedValue,
         description: options?.description,
         tags: options?.tags,
+        environmentId,
       });
     } catch (err: any) {
       if (err.code === 'CONFLICT') {
         // Secret exists, update it
+        const envQuery = environmentId ? `?environmentId=${environmentId}` : '';
         await this.client.put(
-          `/vaults/${vaultId}/secrets/${encodeURIComponent(name)}`,
-          { encryptedValue, description: options?.description, tags: options?.tags },
+          `/vaults/${vaultId}/secrets/${encodeURIComponent(name)}${envQuery}`,
+          { encryptedValue, description: options?.description, tags: options?.tags, environmentId },
         );
       } else {
         throw err;
@@ -83,8 +92,9 @@ export class SecretsResource {
    */
   async delete(name: string, options?: GetSecretOptions): Promise<void> {
     const vaultId = await this.resolveVaultId(options?.vault);
+    const envQuery = options?.env ? await this.buildEnvQuery(options.env, options.vault) : '';
     await this.client.delete(
-      `/vaults/${vaultId}/secrets/${encodeURIComponent(name)}`,
+      `/vaults/${vaultId}/secrets/${encodeURIComponent(name)}${envQuery}`,
     );
   }
 
@@ -93,7 +103,8 @@ export class SecretsResource {
    */
   async list(options?: GetSecretOptions): Promise<SecretData[]> {
     const vaultId = await this.resolveVaultId(options?.vault);
-    return this.client.get<SecretData[]>(`/vaults/${vaultId}/secrets`);
+    const envQuery = options?.env ? await this.buildEnvQuery(options.env, options.vault) : '';
+    return this.client.get<SecretData[]>(`/vaults/${vaultId}/secrets${envQuery}`);
   }
 
   /**
@@ -102,7 +113,8 @@ export class SecretsResource {
   async getAll(options?: GetSecretOptions): Promise<Record<string, string>> {
     const vaultId = await this.resolveVaultId(options?.vault);
     const vaultKey = await this.getVaultKey(vaultId);
-    const secrets = await this.client.get<SecretData[]>(`/vaults/${vaultId}/secrets`);
+    const envQuery = options?.env ? await this.buildEnvQuery(options.env, options.vault) : '';
+    const secrets = await this.client.get<SecretData[]>(`/vaults/${vaultId}/secrets${envQuery}`);
 
     const result: Record<string, string> = {};
     for (const secret of secrets) {
@@ -110,5 +122,15 @@ export class SecretsResource {
       result[secret.name] = decryptSecret(blob, vaultKey);
     }
     return result;
+  }
+
+  private async getEnvId(envName: string, vault?: string): Promise<string> {
+    if (!this.resolveEnvId) throw new Error('Environment resolution not available');
+    return this.resolveEnvId(envName, { vault });
+  }
+
+  private async buildEnvQuery(envName: string, vault?: string): Promise<string> {
+    const envId = await this.getEnvId(envName, vault);
+    return `?environmentId=${envId}`;
   }
 }

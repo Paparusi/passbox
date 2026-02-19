@@ -2,6 +2,7 @@ import type { SecretsResource } from './secrets.js';
 
 export interface EnvImportOptions {
   vault?: string;
+  env?: string;
 }
 
 export class EnvResource {
@@ -48,7 +49,7 @@ export class EnvResource {
 
     for (const [name, value] of Object.entries(entries)) {
       try {
-        await this.secrets.set(name, value, { vault: options?.vault });
+        await this.secrets.set(name, value, { vault: options?.vault, env: options?.env });
         created++;
       } catch {
         updated++;
@@ -62,7 +63,7 @@ export class EnvResource {
    * Export all secrets from a vault as a .env string.
    */
   async export(options?: EnvImportOptions): Promise<string> {
-    const all = await this.secrets.getAll({ vault: options?.vault });
+    const all = await this.secrets.getAll({ vault: options?.vault, env: options?.env });
 
     return Object.entries(all)
       .sort(([a], [b]) => a.localeCompare(b))
@@ -80,7 +81,7 @@ export class EnvResource {
    * Inject all secrets into process.env.
    */
   async inject(options?: EnvImportOptions): Promise<void> {
-    const all = await this.secrets.getAll({ vault: options?.vault });
+    const all = await this.secrets.getAll({ vault: options?.vault, env: options?.env });
     for (const [key, value] of Object.entries(all)) {
       process.env[key] = value;
     }

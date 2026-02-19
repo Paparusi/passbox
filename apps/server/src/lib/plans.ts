@@ -5,6 +5,7 @@ export interface PlanLimits {
   maxVaults: number;
   maxSecretsPerVault: number;
   maxMembersPerVault: number;
+  maxEnvironmentsPerVault: number;
   auditRetentionDays: number;
   maxServiceTokens: number;
 }
@@ -14,6 +15,7 @@ const PLAN_LIMITS: Record<string, PlanLimits> = {
     maxVaults: 3,
     maxSecretsPerVault: 50,
     maxMembersPerVault: 2,
+    maxEnvironmentsPerVault: 3,
     auditRetentionDays: 7,
     maxServiceTokens: 1,
   },
@@ -21,6 +23,7 @@ const PLAN_LIMITS: Record<string, PlanLimits> = {
     maxVaults: -1, // unlimited
     maxSecretsPerVault: -1,
     maxMembersPerVault: -1,
+    maxEnvironmentsPerVault: -1,
     auditRetentionDays: 90,
     maxServiceTokens: 50,
   },
@@ -28,6 +31,7 @@ const PLAN_LIMITS: Record<string, PlanLimits> = {
     maxVaults: -1,
     maxSecretsPerVault: -1,
     maxMembersPerVault: -1,
+    maxEnvironmentsPerVault: -1,
     auditRetentionDays: 365,
     maxServiceTokens: -1,
   },
@@ -35,6 +39,7 @@ const PLAN_LIMITS: Record<string, PlanLimits> = {
     maxVaults: -1,
     maxSecretsPerVault: -1,
     maxMembersPerVault: -1,
+    maxEnvironmentsPerVault: -1,
     auditRetentionDays: -1, // unlimited
     maxServiceTokens: -1,
   },
@@ -109,6 +114,26 @@ export async function checkSecretLimit(vaultId: string, userId: string): Promise
       403,
       'PLAN_LIMIT',
       `Free plan allows ${limits.maxSecretsPerVault} secrets per vault. Upgrade to Pro for unlimited.`,
+    );
+  }
+}
+
+export async function checkEnvironmentLimit(vaultId: string, userId: string): Promise<void> {
+  const plan = await getUserPlan(userId);
+  const limits = getPlanLimits(plan);
+  if (limits.maxEnvironmentsPerVault === -1) return;
+
+  const supabase = getSupabaseAdmin();
+  const { count } = await supabase
+    .from('environments')
+    .select('*', { count: 'exact', head: true })
+    .eq('vault_id', vaultId);
+
+  if ((count || 0) >= limits.maxEnvironmentsPerVault) {
+    throw new AppError(
+      403,
+      'PLAN_LIMIT',
+      `Free plan allows ${limits.maxEnvironmentsPerVault} environments per vault. Upgrade to Pro for unlimited.`,
     );
   }
 }

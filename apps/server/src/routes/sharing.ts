@@ -127,11 +127,32 @@ sharing.put('/:vaultId/members/:memberId', async (c) => {
     throw Errors.forbidden();
   }
 
-  await supabase
+  // Prevent demoting the owner
+  const { data: target } = await supabase
+    .from('vault_members')
+    .select('role')
+    .eq('vault_id', vaultId)
+    .eq('user_id', memberId)
+    .single();
+
+  if (!target) throw Errors.notFound('Member');
+
+  if (target.role === 'owner') {
+    throw Errors.badRequest('Cannot change the role of the vault owner');
+  }
+
+  // Admins cannot promote others to admin (only owners can)
+  if (membership.role === 'admin' && data.role === 'admin') {
+    throw Errors.forbidden('Only owners can promote to admin');
+  }
+
+  const { error } = await supabase
     .from('vault_members')
     .update({ role: data.role })
     .eq('vault_id', vaultId)
     .eq('user_id', memberId);
+
+  if (error) throw Errors.internal(error.message);
 
   return c.json({ success: true });
 });

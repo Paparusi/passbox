@@ -6,11 +6,12 @@ export const getCommand = new Command('get')
   .description('Get a secret value')
   .argument('<name>', 'Secret name')
   .option('-v, --vault <vault>', 'Vault name or ID')
+  .option('-e, --env <environment>', 'Environment name (e.g. development, staging, production)')
   .option('-f, --format <format>', 'Output format (plain, json)', 'plain')
   .action(async (name: string, options) => {
     try {
       const pb = getClient();
-      const value = await pb.secrets.get(name, { vault: options.vault });
+      const value = await pb.secrets.get(name, { vault: options.vault, env: options.env });
 
       if (options.format === 'json') {
         console.log(JSON.stringify({ name, value }));

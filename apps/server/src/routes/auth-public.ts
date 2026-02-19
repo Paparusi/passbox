@@ -71,13 +71,6 @@ authPublic.post('/register', async (c) => {
     key_derivation_params: data.keyDerivationParams,
   });
 
-  // Send verification email via Supabase (generates confirmation link)
-  await supabase.auth.admin.generateLink({
-    type: 'signup',
-    email: data.email,
-    password: data.password,
-  });
-
   return c.json({
     success: true,
     data: {

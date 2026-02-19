@@ -7,13 +7,14 @@ import { printError } from '../lib/output.js';
 export const runCommand = new Command('run')
   .description('Run a command with injected secrets as env vars')
   .option('-v, --vault <vault>', 'Vault to inject from')
+  .option('-e, --env <environment>', 'Environment name (e.g. development, staging, production)')
   .argument('<command...>', 'Command to run')
   .allowUnknownOption()
   .action(async (commandArgs: string[], options) => {
     try {
       const pb = getClient();
       const spinner = ora('Loading secrets...').start();
-      const secrets = await pb.secrets.getAll({ vault: options.vault });
+      const secrets = await pb.secrets.getAll({ vault: options.vault, env: options.env });
       spinner.succeed(`Loaded ${Object.keys(secrets).length} secrets`);
 
       const [cmd, ...args] = commandArgs;
@@ -21,7 +22,6 @@ export const runCommand = new Command('run')
       const child = spawn(cmd, args, {
         stdio: 'inherit',
         env: { ...process.env, ...secrets },
-        shell: true,
       });
 
       child.on('exit', (code) => {

@@ -10,6 +10,16 @@ export interface Vault {
   updatedAt: string;
 }
 
+export interface Environment {
+  id: string;
+  vaultId: string;
+  name: string;
+  description?: string;
+  isDefault: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export type VaultRole = 'owner' | 'admin' | 'member' | 'viewer';
 
 export interface VaultMember {
