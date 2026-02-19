@@ -40,7 +40,7 @@ export default function VaultDetailPage() {
   const vaultId = params.id as string;
   const { toast } = useToast();
   const { confirm } = useConfirm();
-  const { masterKey } = useAuth();
+  const { masterKey, requestUnlock } = useAuth();
 
   const [vault, setVault] = useState<Vault | null>(null);
   const [secrets, setSecrets] = useState<Secret[]>([]);
@@ -281,10 +281,16 @@ export default function VaultDetailPage() {
         </div>
       </div>
 
-      {/* Crypto status */}
+      {/* Crypto status — prompt to unlock */}
       {!masterKey && (
-        <div className="rounded-lg bg-warning/10 border border-warning/30 p-3 text-sm text-warning">
-          Encryption key not available. Log in again to enable E2E encryption.
+        <div className="rounded-lg bg-warning/10 border border-warning/30 p-3 flex items-center justify-between gap-3">
+          <span className="text-sm text-warning">Encryption key expired. Unlock to view and manage secrets.</span>
+          <button
+            onClick={() => requestUnlock()}
+            className="shrink-0 px-3 h-8 text-xs font-medium rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
+          >
+            Unlock
+          </button>
         </div>
       )}
 

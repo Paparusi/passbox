@@ -24,7 +24,7 @@ export default function VaultsPage() {
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
   const { confirm } = useConfirm();
-  const { masterKey } = useAuth();
+  const { masterKey, requestUnlock } = useAuth();
 
   // Create modal
   const [showCreate, setShowCreate] = useState(false);
@@ -55,12 +55,14 @@ export default function VaultsPage() {
     setCreating(true);
 
     try {
-      if (!masterKey) {
-        toast('Encryption key expired. Please log out and log in again.', 'error');
-        return;
+      let key = masterKey;
+      if (!key) {
+        const unlocked = await requestUnlock();
+        if (!unlocked) return; // User cancelled
+        key = unlocked;
       }
 
-      const { encryptedVaultKey } = createVaultKey(masterKey);
+      const { encryptedVaultKey } = createVaultKey(key);
       // encryptedKey: stored on the vault record (vault-level key)
       // encryptedVaultKey: stored on the vault_member record (owner's copy)
       // Both encrypted with the owner's master key at creation time.
