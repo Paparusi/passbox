@@ -37,7 +37,7 @@ authPublic.post('/register', async (c) => {
   const { data: authData, error: authError } = await supabase.auth.admin.createUser({
     email: data.email,
     password: data.password,
-    email_confirm: true,
+    email_confirm: false,
   });
 
   if (authError) {

@@ -6,6 +6,7 @@ type AuthEnv = {
   Variables: {
     userId: string;
     userEmail: string;
+    emailVerified: boolean;
     tokenId?: string;
   };
 };
@@ -50,6 +51,7 @@ export const authMiddleware = createMiddleware<AuthEnv>(async (c, next) => {
 
     c.set('userId', serviceToken.user_id);
     c.set('userEmail', '');
+    c.set('emailVerified', true);
     c.set('tokenId', serviceToken.id);
 
     // Validate vault scope: if token is scoped to specific vaults,
@@ -87,6 +89,7 @@ export const authMiddleware = createMiddleware<AuthEnv>(async (c, next) => {
 
   c.set('userId', user.id);
   c.set('userEmail', user.email || '');
+  c.set('emailVerified', !!user.email_confirmed_at);
   return next();
 });
 
