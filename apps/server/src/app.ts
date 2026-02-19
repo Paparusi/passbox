@@ -24,11 +24,12 @@ import { admin } from './routes/admin.js';
 const app = new Hono();
 
 // ─── Global Middleware ─────────────────────────────
+const isProd = process.env.NODE_ENV === 'production' || process.env.RAILWAY_ENVIRONMENT === 'production';
 const allowedOrigins = [
   'https://passbox.dev',
   'https://www.passbox.dev',
-  'http://localhost:3000',
-  'http://localhost:3001',
+  ...(isProd ? [] : ['http://localhost:3000', 'http://localhost:3001']),
+  ...(process.env.EXTRA_CORS_ORIGINS ? process.env.EXTRA_CORS_ORIGINS.split(',') : []),
 ];
 
 app.use('*', cors({
