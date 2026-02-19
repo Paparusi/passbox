@@ -71,14 +71,9 @@ authPublic.post('/register', async (c) => {
     key_derivation_params: data.keyDerivationParams,
   });
 
-  // Sign in to get tokens
-  const { data: session, error: signInError } = await supabase.auth.admin.generateLink({
-    type: 'magiclink',
-    email: data.email,
-  });
-
-  // Generate session directly
-  const { data: signIn } = await supabase.auth.signInWithPassword({
+  // Send verification email via Supabase (generates confirmation link)
+  await supabase.auth.admin.generateLink({
+    type: 'signup',
     email: data.email,
     password: data.password,
   });
@@ -87,11 +82,8 @@ authPublic.post('/register', async (c) => {
     success: true,
     data: {
       user: { id: userId, email: data.email },
-      session: signIn?.session ? {
-        accessToken: signIn.session.access_token,
-        refreshToken: signIn.session.refresh_token,
-        expiresAt: new Date(signIn.session.expires_at! * 1000).toISOString(),
-      } : null,
+      needsEmailVerification: true,
+      session: null,
       orgId: org?.id,
     },
   }, 201);

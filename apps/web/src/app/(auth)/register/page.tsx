@@ -6,7 +6,6 @@ import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Modal } from '@/components/ui/modal';
-import { useAuth } from '@/lib/auth';
 import { api } from '@/lib/api';
 import { SUPABASE_URL } from '@/lib/utils';
 import {
@@ -34,6 +33,8 @@ function getPasswordStrength(password: string): { score: number; label: string; 
   return { score, label: 'Strong', color: 'bg-success' };
 }
 
+type PageState = 'form' | 'recovery' | 'verify-email';
+
 export default function RegisterPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -42,7 +43,8 @@ export default function RegisterPage() {
   const [loading, setLoading] = useState(false);
   const [loadingMsg, setLoadingMsg] = useState('');
   const [recoveryKey, setRecoveryKey] = useState<string | null>(null);
-  const { login } = useAuth();
+  const [pageState, setPageState] = useState<PageState>('form');
+  const [registeredEmail, setRegisteredEmail] = useState('');
   const router = useRouter();
 
   const strength = useMemo(() => getPasswordStrength(password), [password]);
@@ -85,7 +87,7 @@ export default function RegisterPage() {
 
       // 5. Register on server
       setLoadingMsg('Creating account...');
-      const data = await api.register(email, password, {
+      await api.register(email, password, {
         publicKey: serializePublicKey(keyPair.publicKey),
         encryptedPrivateKey: JSON.stringify(encryptedPrivateKey),
         encryptedMasterKeyRecovery: JSON.stringify(encryptedMasterKey),
@@ -93,11 +95,13 @@ export default function RegisterPage() {
         keyDerivationParams: kdfParams,
       });
 
-      if (data.session) {
-        login(data.session.accessToken, data.user, masterKey, data.session.refreshToken);
-        // Show recovery key before navigating
-        setRecoveryKey(recKey);
-      }
+      // Wipe master key from memory (user will derive again on login)
+      masterKey.fill(0);
+
+      // Show recovery key first
+      setRegisteredEmail(email);
+      setRecoveryKey(recKey);
+      setPageState('recovery');
     } catch (err: any) {
       setError(err.message || 'Registration failed');
     } finally {
@@ -108,9 +112,42 @@ export default function RegisterPage() {
 
   function handleRecoveryDismiss() {
     setRecoveryKey(null);
-    router.push('/vaults');
+    setPageState('verify-email');
   }
 
+  // ─── Verify Email Screen ──────────────────────────
+  if (pageState === 'verify-email') {
+    return (
+      <div className="flex min-h-screen items-center justify-center p-4">
+        <div className="w-full max-w-sm space-y-6 text-center">
+          <div className="space-y-2">
+            <h1 className="text-2xl font-bold">
+              Pass<span className="text-primary">Box</span>
+            </h1>
+            <p className="text-muted-foreground">Check your email</p>
+          </div>
+
+          <div className="rounded-lg bg-success/10 border border-success/20 p-4 space-y-2">
+            <p className="text-sm text-success font-medium">Account created successfully!</p>
+            <p className="text-sm text-muted-foreground">
+              We sent a verification link to <strong className="text-foreground">{registeredEmail}</strong>.
+              Please check your inbox and click the link to verify your account.
+            </p>
+          </div>
+
+          <p className="text-xs text-muted-foreground">
+            Didn&apos;t receive the email? Check your spam folder.
+          </p>
+
+          <Link href="/login">
+            <Button className="w-full" size="lg">Go to Login</Button>
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  // ─── Registration Form ────────────────────────────
   return (
     <div className="flex min-h-screen items-center justify-center p-4">
       <div className="w-full max-w-sm space-y-6">
