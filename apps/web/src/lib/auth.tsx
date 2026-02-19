@@ -39,6 +39,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [masterKeyVersion, setMasterKeyVersion] = useState(0);
   const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const refreshTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const initialRefreshDone = useRef(false);
   const router = useRouter();
 
   // Wipe master key from memory (zero-fill then null)
@@ -62,7 +63,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Refresh the access token using the refresh token
   const refreshAccessToken = useCallback(async () => {
     const refreshToken = sessionStorage.getItem('passbox_refresh_token');
-    if (!refreshToken) return;
+    if (!refreshToken) return false;
 
     try {
       const res = await fetch(`${API_URL}/api/v1/auth/refresh`, {
@@ -74,11 +75,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (data.success && data.data) {
         sessionStorage.setItem('passbox_token', data.data.accessToken);
         sessionStorage.setItem('passbox_refresh_token', data.data.refreshToken);
-        setToken(data.data.accessToken);
+        // Don't call setToken() here — it would re-trigger the useEffect
+        // and create a refresh loop. The API client reads from sessionStorage directly.
+        return true;
       }
     } catch {
-      // Silent fail — next request will 401 and redirect to login
+      // Silent fail — next request will 401 and trigger retry
     }
+    return false;
   }, []);
 
   // Load saved session
@@ -96,13 +100,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!token) {
       if (refreshTimerRef.current) clearInterval(refreshTimerRef.current);
+      initialRefreshDone.current = false;
       return;
     }
 
-    // Refresh immediately if token might be stale (page was reloaded)
-    const savedRefresh = sessionStorage.getItem('passbox_refresh_token');
-    if (savedRefresh) {
-      refreshAccessToken();
+    // Refresh once on initial load (token might be stale after page reload)
+    if (!initialRefreshDone.current) {
+      initialRefreshDone.current = true;
+      const savedRefresh = sessionStorage.getItem('passbox_refresh_token');
+      if (savedRefresh) {
+        refreshAccessToken();
+      }
     }
 
     refreshTimerRef.current = setInterval(refreshAccessToken, REFRESH_INTERVAL_MS);

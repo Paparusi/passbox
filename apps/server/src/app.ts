@@ -5,7 +5,7 @@ import { secureHeaders } from 'hono/secure-headers';
 import { AppError } from './lib/errors.js';
 import { authMiddleware } from './middleware/auth.js';
 import { auditMiddleware } from './middleware/audit.js';
-import { authRateLimit, apiRateLimit, waitlistRateLimit } from './middleware/rate-limit.js';
+import { authRateLimit, refreshRateLimit, apiRateLimit, waitlistRateLimit } from './middleware/rate-limit.js';
 import { health } from './routes/health.js';
 import { authPublic } from './routes/auth-public.js';
 import { authProtected } from './routes/auth-protected.js';
@@ -70,7 +70,10 @@ app.onError((err, c) => {
 // ─── Public Routes ─────────────────────────────────
 app.route('/api/v1/health', health);
 
-// ─── Public Auth Routes (rate limited: 5 req/min) ──
+// ─── Public Auth Routes ─────────────────────────────
+// Token refresh: 20 req/min (session maintenance, not security-sensitive)
+app.use('/api/v1/auth/refresh', refreshRateLimit);
+// Login/register/recover: 5 req/min (brute-force protection)
 app.use('/api/v1/auth/*', authRateLimit);
 app.route('/api/v1/auth', authPublic);
 

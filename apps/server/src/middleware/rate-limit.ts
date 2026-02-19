@@ -57,8 +57,11 @@ export function rateLimiter(maxRequests: number, windowMs: number, prefix = 'rl'
   });
 }
 
-/** Strict: 5 requests per minute (auth endpoints) */
+/** Strict: 5 requests per minute (login/register) */
 export const authRateLimit = rateLimiter(5, 60 * 1000, 'auth');
+
+/** Token refresh: 20 requests per minute (session maintenance) */
+export const refreshRateLimit = rateLimiter(20, 60 * 1000, 'refresh');
 
 /** Normal: 60 requests per minute (API endpoints) */
 export const apiRateLimit = rateLimiter(60, 60 * 1000, 'api');

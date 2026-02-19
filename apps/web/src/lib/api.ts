@@ -2,6 +2,7 @@ import { API_URL } from './utils';
 
 class ApiClient {
   private baseUrl: string;
+  private refreshing: Promise<boolean> | null = null;
 
   constructor() {
     this.baseUrl = `${API_URL}/api/v1`;
@@ -12,7 +13,38 @@ class ApiClient {
     return sessionStorage.getItem('passbox_token');
   }
 
-  private async request<T>(path: string, options: RequestInit = {}): Promise<T> {
+  // Try to refresh the access token. Deduplicates concurrent calls.
+  private async tryRefresh(): Promise<boolean> {
+    if (this.refreshing) return this.refreshing;
+
+    this.refreshing = (async () => {
+      try {
+        const refreshToken = sessionStorage.getItem('passbox_refresh_token');
+        if (!refreshToken) return false;
+
+        const res = await fetch(`${this.baseUrl}/auth/refresh`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ refreshToken }),
+        });
+        const data = await res.json();
+        if (data.success && data.data) {
+          sessionStorage.setItem('passbox_token', data.data.accessToken);
+          sessionStorage.setItem('passbox_refresh_token', data.data.refreshToken);
+          return true;
+        }
+        return false;
+      } catch {
+        return false;
+      } finally {
+        this.refreshing = null;
+      }
+    })();
+
+    return this.refreshing;
+  }
+
+  private async doFetch(path: string, options: RequestInit = {}): Promise<Response> {
     const token = this.getToken();
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
@@ -21,11 +53,19 @@ class ApiClient {
     if (token) {
       headers['Authorization'] = `Bearer ${token}`;
     }
+    return fetch(`${this.baseUrl}${path}`, { ...options, headers });
+  }
 
-    const res = await fetch(`${this.baseUrl}${path}`, {
-      ...options,
-      headers,
-    });
+  private async request<T>(path: string, options: RequestInit = {}): Promise<T> {
+    let res = await this.doFetch(path, options);
+
+    // On 401, try refreshing the token once and retry
+    if (res.status === 401) {
+      const refreshed = await this.tryRefresh();
+      if (refreshed) {
+        res = await this.doFetch(path, options);
+      }
+    }
 
     const data = await res.json();
     if (!data.success) {
