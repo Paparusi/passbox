@@ -11,7 +11,6 @@ type AdminEnv = {
 
 const admin = new Hono<AdminEnv>();
 
-// Apply admin middleware to all admin routes
 admin.use('*', adminMiddleware);
 
 // ─── Check if current user is admin ──────────────
@@ -23,13 +22,24 @@ admin.get('/check', async (c) => {
 admin.get('/stats', async (c) => {
   const supabase = getSupabaseAdmin();
 
-  const [userKeysRes, vaultsRes, secretsRes, orgsRes, waitlistRes, subsRes] = await Promise.all([
+  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+
+  const [
+    userKeysRes, vaultsRes, secretsRes, orgsRes, waitlistRes, subsRes,
+    serviceTokensRes, auditLogsRes, vaultMembersRes, secretVersionsRes,
+    recentKeysRes,
+  ] = await Promise.all([
     supabase.from('user_keys').select('*', { count: 'exact', head: true }),
     supabase.from('vaults').select('*', { count: 'exact', head: true }),
     supabase.from('secrets').select('*', { count: 'exact', head: true }),
     supabase.from('organizations').select('*', { count: 'exact', head: true }),
     supabase.from('waitlist').select('*', { count: 'exact', head: true }),
     supabase.from('subscriptions').select('plan').eq('status', 'active'),
+    supabase.from('service_tokens').select('*', { count: 'exact', head: true }),
+    supabase.from('audit_logs').select('*', { count: 'exact', head: true }),
+    supabase.from('vault_members').select('*', { count: 'exact', head: true }),
+    supabase.from('secret_versions').select('*', { count: 'exact', head: true }),
+    supabase.from('user_keys').select('*', { count: 'exact', head: true }).gte('created_at', sevenDaysAgo),
   ]);
 
   const planBreakdown: Record<string, number> = { free: 0, pro: 0, team: 0, enterprise: 0 };
@@ -47,9 +57,62 @@ admin.get('/stats', async (c) => {
       totalSecrets: secretsRes.count || 0,
       totalOrgs: orgsRes.count || 0,
       waitlistCount: waitlistRes.count || 0,
+      totalServiceTokens: serviceTokensRes.count || 0,
+      totalAuditLogs: auditLogsRes.count || 0,
+      totalVaultMembers: vaultMembersRes.count || 0,
+      totalSecretVersions: secretVersionsRes.count || 0,
+      recentSignups: recentKeysRes.count || 0,
       subscriptions: planBreakdown,
     },
   });
+});
+
+// ─── Recent Activity ─────────────────────────────
+admin.get('/activity', async (c) => {
+  const supabase = getSupabaseAdmin();
+  const limit = Math.min(parseInt(c.req.query('limit') || '15'), 50);
+
+  const { data, error } = await supabase
+    .from('audit_logs')
+    .select('*')
+    .order('created_at', { ascending: false })
+    .limit(limit);
+
+  if (error) {
+    throw Errors.internal(error.message);
+  }
+
+  // Enrich with user emails
+  const userIds = [...new Set((data || []).map(l => l.user_id).filter(Boolean))];
+  const emailMap = new Map<string, string>();
+
+  if (userIds.length > 0) {
+    const { data: keys } = await supabase
+      .from('user_keys')
+      .select('user_id')
+      .in('user_id', userIds);
+
+    // Get emails from Supabase Auth
+    for (const uid of userIds) {
+      try {
+        const { data: { user } } = await supabase.auth.admin.getUserById(uid);
+        if (user?.email) emailMap.set(uid, user.email);
+      } catch {}
+    }
+  }
+
+  const enrichedLogs = (data || []).map(log => ({
+    id: log.id,
+    action: log.action,
+    resourceType: log.resource_type,
+    resourceId: log.resource_id,
+    userId: log.user_id,
+    userEmail: emailMap.get(log.user_id) || null,
+    metadata: log.metadata,
+    createdAt: log.created_at,
+  }));
+
+  return c.json({ success: true, data: enrichedLogs });
 });
 
 // ─── List All Users ──────────────────────────────
@@ -70,28 +133,43 @@ admin.get('/users', async (c) => {
   const users = authData?.users || [];
   const userIds = users.map(u => u.id);
 
-  // Get subscription data for these users
-  const { data: subs } = userIds.length > 0
-    ? await supabase.from('subscriptions').select('user_id, plan, status').in('user_id', userIds)
-    : { data: [] };
+  // Get subscription, vault, secret, service token data in parallel
+  const [subsRes, vaultCountsRes, secretCountsRes, tokenCountsRes] = userIds.length > 0
+    ? await Promise.all([
+        supabase.from('subscriptions').select('user_id, plan, status').in('user_id', userIds),
+        supabase.from('vault_members').select('user_id').in('user_id', userIds).eq('role', 'owner'),
+        supabase.from('secrets').select('created_by').in('created_by', userIds),
+        supabase.from('service_tokens').select('user_id').in('user_id', userIds),
+      ])
+    : [{ data: [] }, { data: [] }, { data: [] }, { data: [] }];
 
-  // Get vault counts per user
-  const { data: vaultCounts } = userIds.length > 0
-    ? await supabase.from('vault_members').select('user_id').in('user_id', userIds).eq('role', 'owner')
-    : { data: [] };
+  const subMap = new Map((subsRes.data || []).map(s => [s.user_id, s]));
 
-  const subMap = new Map((subs || []).map(s => [s.user_id, s]));
   const vaultCountMap = new Map<string, number>();
-  for (const vm of (vaultCounts || [])) {
+  for (const vm of (vaultCountsRes.data || [])) {
     vaultCountMap.set(vm.user_id, (vaultCountMap.get(vm.user_id) || 0) + 1);
+  }
+
+  const secretCountMap = new Map<string, number>();
+  for (const s of (secretCountsRes.data || [])) {
+    secretCountMap.set(s.created_by, (secretCountMap.get(s.created_by) || 0) + 1);
+  }
+
+  const tokenCountMap = new Map<string, number>();
+  for (const t of (tokenCountsRes.data || [])) {
+    tokenCountMap.set(t.user_id, (tokenCountMap.get(t.user_id) || 0) + 1);
   }
 
   const enrichedUsers = users.map(u => ({
     id: u.id,
     email: u.email || '',
+    provider: u.app_metadata?.provider || 'email',
+    emailVerified: !!u.email_confirmed_at,
     plan: subMap.get(u.id)?.plan || 'free',
     planStatus: subMap.get(u.id)?.status || 'active',
     vaultCount: vaultCountMap.get(u.id) || 0,
+    secretCount: secretCountMap.get(u.id) || 0,
+    tokenCount: tokenCountMap.get(u.id) || 0,
     createdAt: u.created_at,
     lastSignIn: u.last_sign_in_at || null,
   }));
@@ -138,6 +216,63 @@ admin.put('/users/:id/plan', async (c) => {
   }
 
   return c.json({ success: true, data: { userId: targetUserId, plan } });
+});
+
+// ─── Delete User ─────────────────────────────────
+admin.delete('/users/:id', async (c) => {
+  const targetUserId = c.req.param('id');
+  const adminUserId = c.get('userId');
+  const supabase = getSupabaseAdmin();
+
+  if (targetUserId === adminUserId) {
+    throw Errors.badRequest('Cannot delete your own account from admin panel');
+  }
+
+  // Cascade delete: same pattern as account self-deletion
+  const { data: memberships } = await supabase
+    .from('vault_members')
+    .select('vault_id')
+    .eq('user_id', targetUserId);
+
+  const vaultIds = memberships?.map(m => m.vault_id) || [];
+
+  if (vaultIds.length > 0) {
+    await supabase.from('secret_versions').delete().in('secret_id',
+      supabase.from('secrets').select('id').in('vault_id', vaultIds) as any
+    );
+    await supabase.from('secrets').delete().in('vault_id', vaultIds);
+    await supabase.from('vault_members').delete().in('vault_id', vaultIds);
+    await supabase.from('vaults').delete().in('id', vaultIds);
+  }
+
+  await supabase.from('vault_members').delete().eq('user_id', targetUserId);
+  await supabase.from('service_tokens').delete().eq('user_id', targetUserId);
+  await supabase.from('audit_logs').delete().eq('user_id', targetUserId);
+  await supabase.from('user_keys').delete().eq('user_id', targetUserId);
+
+  const { data: userOrgs } = await supabase
+    .from('org_members')
+    .select('org_id')
+    .eq('user_id', targetUserId);
+
+  await supabase.from('org_members').delete().eq('user_id', targetUserId);
+
+  if (userOrgs) {
+    for (const { org_id } of userOrgs) {
+      const { count } = await supabase
+        .from('org_members')
+        .select('*', { count: 'exact', head: true })
+        .eq('org_id', org_id);
+      if (count === 0) {
+        await supabase.from('organizations').delete().eq('id', org_id);
+      }
+    }
+  }
+
+  await supabase.from('subscriptions').delete().eq('user_id', targetUserId);
+  await supabase.auth.admin.deleteUser(targetUserId);
+
+  return c.json({ success: true, data: { deleted: targetUserId } });
 });
 
 // ─── List Waitlist Entries ───────────────────────

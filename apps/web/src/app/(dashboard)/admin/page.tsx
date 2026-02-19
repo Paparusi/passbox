@@ -12,7 +12,23 @@ interface Stats {
   totalSecrets: number;
   totalOrgs: number;
   waitlistCount: number;
+  totalServiceTokens: number;
+  totalAuditLogs: number;
+  totalVaultMembers: number;
+  totalSecretVersions: number;
+  recentSignups: number;
   subscriptions: Record<string, number>;
+}
+
+interface ActivityLog {
+  id: string;
+  action: string;
+  resourceType: string;
+  resourceId: string;
+  userId: string;
+  userEmail: string | null;
+  metadata: any;
+  createdAt: string;
 }
 
 function StatCard({ label, value }: { label: string; value: string | number }) {
@@ -24,18 +40,41 @@ function StatCard({ label, value }: { label: string; value: string | number }) {
   );
 }
 
+function timeAgo(dateStr: string): string {
+  const d = new Date(dateStr);
+  const now = new Date();
+  const diff = now.getTime() - d.getTime();
+  const minutes = Math.floor(diff / 60000);
+  if (minutes < 1) return 'just now';
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 30) return `${days}d ago`;
+  return d.toLocaleDateString();
+}
+
+function formatAction(action: string): string {
+  return action.replace(/[._]/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+}
+
 export default function AdminOverviewPage() {
   const { toast } = useToast();
   const router = useRouter();
   const [stats, setStats] = useState<Stats | null>(null);
+  const [activity, setActivity] = useState<ActivityLog[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     async function load() {
       try {
         await api.adminCheck();
-        const data = await api.adminGetStats();
-        setStats(data);
+        const [statsData, activityData] = await Promise.all([
+          api.adminGetStats(),
+          api.adminGetActivity({ limit: 15 }),
+        ]);
+        setStats(statsData);
+        setActivity(activityData);
       } catch (err: any) {
         if (err.message?.includes('permissions') || err.message?.includes('FORBIDDEN')) {
           toast('Access denied. Admin privileges required.', 'error');
@@ -81,6 +120,7 @@ export default function AdminOverviewPage() {
         </Link>
       </div>
 
+      {/* Primary Stats */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
         <StatCard label="Total Users" value={stats.totalUsers} />
         <StatCard label="Total Vaults" value={stats.totalVaults} />
@@ -88,8 +128,19 @@ export default function AdminOverviewPage() {
         <StatCard label="Organizations" value={stats.totalOrgs} />
         <StatCard label="Waitlist" value={stats.waitlistCount} />
         <StatCard label="Active Subscriptions" value={totalActiveSubs} />
+        <StatCard label="Signups (7d)" value={stats.recentSignups} />
+        <StatCard label="Service Tokens" value={stats.totalServiceTokens} />
       </div>
 
+      {/* Secondary Stats */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        <StatCard label="Vault Members" value={stats.totalVaultMembers} />
+        <StatCard label="Secret Versions" value={stats.totalSecretVersions} />
+        <StatCard label="Audit Logs" value={stats.totalAuditLogs} />
+        <StatCard label="Avg Secrets/Vault" value={stats.totalVaults > 0 ? Math.round(stats.totalSecrets / stats.totalVaults) : 0} />
+      </div>
+
+      {/* Subscriptions by Plan */}
       <div className="border border-border rounded-xl p-6 space-y-4">
         <h2 className="text-lg font-semibold">Subscriptions by Plan</h2>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
@@ -100,6 +151,40 @@ export default function AdminOverviewPage() {
             </div>
           ))}
         </div>
+      </div>
+
+      {/* Recent Activity */}
+      <div className="border border-border rounded-xl overflow-hidden">
+        <div className="px-6 py-4 border-b border-border">
+          <h2 className="text-lg font-semibold">Recent Activity</h2>
+          <p className="text-xs text-muted-foreground mt-1">Last 15 platform events</p>
+        </div>
+        {activity.length === 0 ? (
+          <div className="px-6 py-8 text-center text-muted-foreground text-sm">
+            No activity recorded yet
+          </div>
+        ) : (
+          <div className="divide-y divide-border">
+            {activity.map(log => (
+              <div key={log.id} className="px-6 py-3 flex items-center justify-between gap-4">
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-sm font-medium">{formatAction(log.action)}</span>
+                    <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
+                      {log.resourceType}
+                    </span>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-0.5 truncate">
+                    {log.userEmail || log.userId.slice(0, 8) + '...'}
+                  </p>
+                </div>
+                <span className="text-xs text-muted-foreground whitespace-nowrap">
+                  {timeAgo(log.createdAt)}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

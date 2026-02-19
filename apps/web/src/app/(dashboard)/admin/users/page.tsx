@@ -5,14 +5,19 @@ import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Modal } from '@/components/ui/modal';
 import { useToast } from '@/components/ui/toast';
+import { useConfirm } from '@/components/ui/confirm';
 import { api } from '@/lib/api';
 
 interface AdminUser {
   id: string;
   email: string;
+  provider: string;
+  emailVerified: boolean;
   plan: string;
   planStatus: string;
   vaultCount: number;
+  secretCount: number;
+  tokenCount: number;
   createdAt: string;
   lastSignIn: string | null;
 }
@@ -47,8 +52,18 @@ function PlanBadge({ plan }: { plan: string }) {
   );
 }
 
+function ProviderBadge({ provider }: { provider: string }) {
+  const isGitHub = provider === 'github';
+  return (
+    <span className={`text-xs px-2 py-0.5 rounded-full ${isGitHub ? 'bg-muted text-foreground' : 'bg-muted text-muted-foreground'}`}>
+      {isGitHub ? 'GitHub' : 'Email'}
+    </span>
+  );
+}
+
 export default function AdminUsersPage() {
   const { toast } = useToast();
+  const { confirm } = useConfirm();
   const router = useRouter();
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [loading, setLoading] = useState(true);
@@ -57,6 +72,7 @@ export default function AdminUsersPage() {
   const [changingUser, setChangingUser] = useState<AdminUser | null>(null);
   const [selectedPlan, setSelectedPlan] = useState('');
   const [saving, setSaving] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   async function loadUsers(p: number) {
     setLoading(true);
@@ -99,6 +115,27 @@ export default function AdminUsersPage() {
     }
   }
 
+  async function handleDeleteUser(user: AdminUser) {
+    const ok = await confirm({
+      title: 'Delete User',
+      message: `Permanently delete ${user.email}? This will remove all their vaults, secrets, and data. This action cannot be undone.`,
+      confirmLabel: 'Delete User',
+      destructive: true,
+    });
+    if (!ok) return;
+
+    setDeletingId(user.id);
+    try {
+      await api.adminDeleteUser(user.id);
+      toast(`Deleted ${user.email}`, 'success');
+      setUsers(prev => prev.filter(u => u.id !== user.id));
+    } catch (err: any) {
+      toast(err.message || 'Failed to delete user', 'error');
+    } finally {
+      setDeletingId(null);
+    }
+  }
+
   return (
     <div className="space-y-6">
       <div>
@@ -118,34 +155,59 @@ export default function AdminUsersPage() {
         <>
           <div className="border border-border rounded-xl overflow-hidden">
             {/* Desktop table */}
-            <table className="w-full hidden md:table">
-              <thead>
-                <tr className="border-b border-border bg-muted/50">
-                  <th className="text-left text-xs font-medium text-muted-foreground px-4 py-3">EMAIL</th>
-                  <th className="text-left text-xs font-medium text-muted-foreground px-4 py-3">PLAN</th>
-                  <th className="text-left text-xs font-medium text-muted-foreground px-4 py-3">VAULTS</th>
-                  <th className="text-left text-xs font-medium text-muted-foreground px-4 py-3">CREATED</th>
-                  <th className="text-left text-xs font-medium text-muted-foreground px-4 py-3">LAST ACTIVE</th>
-                  <th className="text-right text-xs font-medium text-muted-foreground px-4 py-3">ACTIONS</th>
-                </tr>
-              </thead>
-              <tbody>
-                {users.map((user) => (
-                  <tr key={user.id} className="border-b border-border last:border-0 hover:bg-muted/30 transition-colors">
-                    <td className="px-4 py-3 text-sm">{user.email}</td>
-                    <td className="px-4 py-3"><PlanBadge plan={user.plan} /></td>
-                    <td className="px-4 py-3 text-sm text-muted-foreground">{user.vaultCount}</td>
-                    <td className="px-4 py-3 text-sm text-muted-foreground">{new Date(user.createdAt).toLocaleDateString()}</td>
-                    <td className="px-4 py-3 text-sm text-muted-foreground">{timeAgo(user.lastSignIn)}</td>
-                    <td className="px-4 py-3 text-right">
-                      <Button variant="ghost" size="sm" onClick={() => openPlanChange(user)}>
-                        Change Plan
-                      </Button>
-                    </td>
+            <div className="hidden md:block overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-border bg-muted/50">
+                    <th className="text-left text-xs font-medium text-muted-foreground px-4 py-3">USER</th>
+                    <th className="text-left text-xs font-medium text-muted-foreground px-4 py-3">PROVIDER</th>
+                    <th className="text-left text-xs font-medium text-muted-foreground px-4 py-3">PLAN</th>
+                    <th className="text-left text-xs font-medium text-muted-foreground px-4 py-3">VAULTS</th>
+                    <th className="text-left text-xs font-medium text-muted-foreground px-4 py-3">SECRETS</th>
+                    <th className="text-left text-xs font-medium text-muted-foreground px-4 py-3">TOKENS</th>
+                    <th className="text-left text-xs font-medium text-muted-foreground px-4 py-3">LAST ACTIVE</th>
+                    <th className="text-right text-xs font-medium text-muted-foreground px-4 py-3">ACTIONS</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {users.map((user) => (
+                    <tr key={user.id} className="border-b border-border last:border-0 hover:bg-muted/30 transition-colors">
+                      <td className="px-4 py-3">
+                        <div>
+                          <p className="text-sm">{user.email}</p>
+                          <p className="text-xs text-muted-foreground">
+                            Joined {new Date(user.createdAt).toLocaleDateString()}
+                            {!user.emailVerified && ' (unverified)'}
+                          </p>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3"><ProviderBadge provider={user.provider} /></td>
+                      <td className="px-4 py-3"><PlanBadge plan={user.plan} /></td>
+                      <td className="px-4 py-3 text-sm text-muted-foreground">{user.vaultCount}</td>
+                      <td className="px-4 py-3 text-sm text-muted-foreground">{user.secretCount}</td>
+                      <td className="px-4 py-3 text-sm text-muted-foreground">{user.tokenCount}</td>
+                      <td className="px-4 py-3 text-sm text-muted-foreground">{timeAgo(user.lastSignIn)}</td>
+                      <td className="px-4 py-3 text-right">
+                        <div className="flex items-center justify-end gap-1">
+                          <Button variant="ghost" size="sm" onClick={() => openPlanChange(user)}>
+                            Plan
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleDeleteUser(user)}
+                            disabled={deletingId === user.id}
+                            className="text-destructive hover:text-destructive"
+                          >
+                            {deletingId === user.id ? '...' : 'Delete'}
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
 
             {/* Mobile list */}
             <div className="md:hidden divide-y divide-border">
@@ -153,13 +215,34 @@ export default function AdminUsersPage() {
                 <div key={user.id} className="px-4 py-3 space-y-2">
                   <div className="flex items-center justify-between">
                     <span className="text-sm font-medium">{user.email}</span>
-                    <PlanBadge plan={user.plan} />
+                    <div className="flex items-center gap-1">
+                      <ProviderBadge provider={user.provider} />
+                      <PlanBadge plan={user.plan} />
+                    </div>
                   </div>
-                  <div className="flex items-center justify-between text-xs text-muted-foreground">
-                    <span>{user.vaultCount} vaults | Joined {new Date(user.createdAt).toLocaleDateString()}</span>
-                    <Button variant="ghost" size="sm" onClick={() => openPlanChange(user)}>
-                      Change Plan
-                    </Button>
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-muted-foreground">
+                      {user.vaultCount} vaults, {user.secretCount} secrets, {user.tokenCount} tokens
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-muted-foreground">
+                      Joined {new Date(user.createdAt).toLocaleDateString()} | Active {timeAgo(user.lastSignIn)}
+                    </span>
+                    <div className="flex items-center gap-1">
+                      <Button variant="ghost" size="sm" onClick={() => openPlanChange(user)}>
+                        Plan
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleDeleteUser(user)}
+                        disabled={deletingId === user.id}
+                        className="text-destructive hover:text-destructive"
+                      >
+                        {deletingId === user.id ? '...' : 'Delete'}
+                      </Button>
+                    </div>
                   </div>
                 </div>
               ))}

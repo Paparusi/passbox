@@ -303,8 +303,29 @@ class ApiClient {
       totalSecrets: number;
       totalOrgs: number;
       waitlistCount: number;
+      totalServiceTokens: number;
+      totalAuditLogs: number;
+      totalVaultMembers: number;
+      totalSecretVersions: number;
+      recentSignups: number;
       subscriptions: Record<string, number>;
     }>('/admin/stats');
+  }
+
+  async adminGetActivity(params?: { limit?: number }) {
+    const query = new URLSearchParams();
+    if (params?.limit) query.set('limit', String(params.limit));
+    const qs = query.toString();
+    return this.request<Array<{
+      id: string;
+      action: string;
+      resourceType: string;
+      resourceId: string;
+      userId: string;
+      userEmail: string | null;
+      metadata: any;
+      createdAt: string;
+    }>>(`/admin/activity${qs ? '?' + qs : ''}`);
   }
 
   async adminGetUsers(params?: { page?: number; perPage?: number }) {
@@ -316,9 +337,13 @@ class ApiClient {
       users: Array<{
         id: string;
         email: string;
+        provider: string;
+        emailVerified: boolean;
         plan: string;
         planStatus: string;
         vaultCount: number;
+        secretCount: number;
+        tokenCount: number;
         createdAt: string;
         lastSignIn: string | null;
       }>;
@@ -326,6 +351,12 @@ class ApiClient {
       perPage: number;
       hasMore: boolean;
     }>(`/admin/users${qs ? '?' + qs : ''}`);
+  }
+
+  async adminDeleteUser(userId: string) {
+    return this.request<{ deleted: string }>(`/admin/users/${userId}`, {
+      method: 'DELETE',
+    });
   }
 
   async adminChangeUserPlan(userId: string, plan: string) {
