@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useContext, useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { createContext, useContext, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { API_URL } from './utils';
 import { deriveMasterKey, decryptBytes, fromBase64, type EncryptedBlob } from './crypto';
@@ -229,7 +229,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const login = (newToken: string, newUser: User, newMasterKey?: Uint8Array, refreshToken?: string) => {
+  const login = useCallback((newToken: string, newUser: User, newMasterKey?: Uint8Array, refreshToken?: string) => {
     sessionStorage.setItem('passbox_token', newToken);
     sessionStorage.setItem('passbox_user', JSON.stringify(newUser));
     if (refreshToken) {
@@ -241,9 +241,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       masterKeyRef.current = newMasterKey;
       setMasterKeyVersion(v => v + 1);
     }
-  };
+  }, []);
 
-  const logout = () => {
+  const logout = useCallback(() => {
     sessionStorage.removeItem('passbox_token');
     sessionStorage.removeItem('passbox_user');
     sessionStorage.removeItem('passbox_refresh_token');
@@ -254,18 +254,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
     setMasterKeyVersion(0);
     router.push('/login');
-  };
+  }, [wipeMasterKey, router]);
+
+  const contextValue = useMemo(() => ({
+    user,
+    token,
+    loading,
+    masterKey: masterKeyRef.current,
+    login,
+    logout,
+    requestUnlock,
+  }), [user, token, loading, masterKeyVersion, login, logout, requestUnlock]);
 
   return (
-    <AuthContext.Provider value={{
-      user,
-      token,
-      loading,
-      masterKey: masterKeyRef.current,
-      login,
-      logout,
-      requestUnlock,
-    }}>
+    <AuthContext.Provider value={contextValue}>
       {children}
 
       {/* Unlock Modal — re-enter encryption password */}
