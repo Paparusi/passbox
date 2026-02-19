@@ -47,9 +47,6 @@ const createSecretSchema = z.object({
 
 secrets.post('/:vaultId/secrets', async (c) => {
   const userId = c.get('userId');
-  if (c.get('emailVerified') === false) {
-    throw Errors.forbidden('Please verify your email before creating secrets.');
-  }
   const vaultId = c.req.param('vaultId');
   const body = await c.req.json();
   const data = createSecretSchema.parse(body);

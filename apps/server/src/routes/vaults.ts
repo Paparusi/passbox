@@ -24,9 +24,6 @@ const createVaultSchema = z.object({
 
 vaults.post('/', async (c) => {
   const userId = c.get('userId');
-  if (c.get('emailVerified') === false) {
-    throw Errors.forbidden('Please verify your email before creating vaults.');
-  }
   const body = await c.req.json();
   const data = createVaultSchema.parse(body);
   const supabase = getSupabaseAdmin();

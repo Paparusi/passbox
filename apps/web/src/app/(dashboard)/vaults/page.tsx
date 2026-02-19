@@ -56,7 +56,7 @@ export default function VaultsPage() {
 
     try {
       if (!masterKey) {
-        toast('Please log in again to create vaults', 'error');
+        toast('Encryption key expired. Please log out and log in again.', 'error');
         return;
       }
 
