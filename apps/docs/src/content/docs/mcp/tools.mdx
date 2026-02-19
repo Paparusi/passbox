@@ -1,0 +1,157 @@
+---
+title: MCP Tools Reference
+description: All 11 MCP tools available to AI agents.
+---
+
+## Secret Management
+
+### passbox_get_secret
+
+Get a decrypted secret value.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `name` | string | Yes | Secret name (e.g., `DATABASE_URL`) |
+| `vault` | string | No | Vault name or ID |
+| `env` | string | No | Environment name |
+
+**Example prompt:** "Get the DATABASE_URL from the production environment"
+
+### passbox_set_secret
+
+Create or update a secret.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `name` | string | Yes | Secret name |
+| `value` | string | Yes | Secret value (encrypted before storage) |
+| `vault` | string | No | Vault name or ID |
+| `env` | string | No | Environment name |
+| `description` | string | No | Description |
+
+**Example prompt:** "Store a new API key called OPENAI_KEY with value sk-abc123"
+
+### passbox_delete_secret
+
+Delete a secret.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `name` | string | Yes | Secret name to delete |
+| `vault` | string | No | Vault name or ID |
+| `env` | string | No | Environment name |
+
+### passbox_list_secrets
+
+List all secret names in a vault.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `vault` | string | No | Vault name or ID |
+| `env` | string | No | Environment name |
+
+**Example prompt:** "What secrets do I have in the staging environment?"
+
+## Vault & Environment
+
+### passbox_list_vaults
+
+List all accessible vaults with roles.
+
+No parameters required.
+
+**Example prompt:** "List my PassBox vaults"
+
+### passbox_list_environments
+
+List environments in a vault.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `vault` | string | No | Vault name or ID |
+
+### passbox_get_environment
+
+Get all secrets in an environment as key-value pairs.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `vault` | string | No | Vault name or ID |
+| `env` | string | No | Environment name |
+
+**Example prompt:** "Show me all the config for the production environment"
+
+## .env Operations
+
+### passbox_diff_env
+
+Compare local `.env` content with vault secrets. Shows missing, extra, and different values.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `envContent` | string | Yes | Content of the local `.env` file |
+| `vault` | string | No | Vault name or ID |
+| `env` | string | No | Environment to compare against |
+
+**Example prompt:** "Compare my .env file with the staging vault"
+
+Output includes:
+- Missing locally (in vault but not in .env)
+- Extra locally (in .env but not in vault)
+- Different values
+- Summary counts
+
+### passbox_import_env
+
+Import `.env` file content into a vault.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `envContent` | string | Yes | Content of the `.env` file |
+| `vault` | string | No | Vault name or ID |
+| `env` | string | No | Target environment |
+
+**Example prompt:** "Import this .env file into the staging environment"
+
+## Advanced
+
+### passbox_rotate_secret
+
+Trigger manual rotation for a secret. Fires the `secret.rotated` webhook event.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `name` | string | Yes | Secret name |
+| `vault` | string | No | Vault name or ID |
+
+### passbox_proxy_request
+
+Make an HTTP request with secrets injected as placeholders. Secrets referenced as `{{SECRET_NAME}}` are resolved and injected — the AI agent never sees the raw values.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `url` | string | Yes | URL with optional `{{SECRET_NAME}}` placeholders |
+| `method` | string | No | `GET`, `POST`, `PUT`, `PATCH`, `DELETE` (default: `GET`) |
+| `headers` | object | No | Headers with optional placeholders |
+| `body` | string | No | Request body with optional placeholders |
+| `vault` | string | No | Vault name or ID |
+| `env` | string | No | Environment name |
+
+**Example prompt:** "Call the Stripe API to list customers, using my STRIPE_SECRET_KEY"
+
+The agent would generate:
+```json
+{
+  "url": "https://api.stripe.com/v1/customers",
+  "method": "GET",
+  "headers": {
+    "Authorization": "Bearer {{STRIPE_SECRET_KEY}}"
+  }
+}
+```
+
+The MCP server resolves `{{STRIPE_SECRET_KEY}}` to the actual value, makes the request, and returns only the response — the AI never sees the key.
+
+:::note
+SSRF protection: `passbox_proxy_request` blocks requests to `localhost`, `127.0.0.1`, private IP ranges (`10.x`, `192.168.x`, `172.x`), and metadata endpoints (`169.254.169.254`). Only HTTPS and HTTP URLs are allowed.
+:::

@@ -1,0 +1,131 @@
+---
+title: Environments
+description: Manage environments for development, staging, and production secrets.
+---
+
+## Overview
+
+Environments let you store different values for the same secret name across deployment stages. Every vault starts with a default `development` environment.
+
+## List Environments
+
+```bash
+passbox environment list [options]
+```
+
+### Options
+
+| Option | Description |
+|--------|-------------|
+| `--vault <name>` | Vault name or ID |
+
+### Example
+
+```bash
+passbox environment list --vault my-app
+# development (default)
+# staging
+# production
+```
+
+## Create an Environment
+
+```bash
+passbox environment create <name> [options]
+```
+
+### Options
+
+| Option | Description |
+|--------|-------------|
+| `--vault <name>` | Vault name or ID |
+| `--description <text>` | Optional description |
+
+### Example
+
+```bash
+passbox environment create staging --vault my-app --description "Staging environment"
+```
+
+## Delete an Environment
+
+```bash
+passbox environment delete <name> [options]
+```
+
+Requires `admin` or `owner` role. Deleting an environment also deletes all secrets in that environment.
+
+### Options
+
+| Option | Description |
+|--------|-------------|
+| `--vault <name>` | Vault name or ID |
+
+:::caution
+This permanently deletes all secrets in the environment.
+:::
+
+## Clone an Environment
+
+```bash
+passbox environment clone <target> --from <source> [options]
+```
+
+Copies all secrets from one environment to another. Useful for initializing a new environment with existing config.
+
+### Options
+
+| Option | Description |
+|--------|-------------|
+| `--from <name>` | Source environment to clone from |
+| `--vault <name>` | Vault name or ID |
+
+### Example
+
+```bash
+# Create production environment with staging's secrets
+passbox environment create production --vault my-app
+passbox environment clone production --from staging --vault my-app
+```
+
+## Using the --env Flag
+
+Most secret commands accept `--env` to target a specific environment:
+
+```bash
+# Store secrets in different environments
+passbox set DATABASE_URL "postgres://dev/db" --env development
+passbox set DATABASE_URL "postgres://staging/db" --env staging
+passbox set DATABASE_URL "postgres://prod/db" --env production
+
+# Retrieve from specific environment
+passbox get DATABASE_URL --env production
+
+# List secrets in an environment
+passbox list --env staging
+
+# Run with production secrets
+passbox run --env production -- node server.js
+
+# Push/pull .env for specific environment
+passbox env push .env.staging --env staging
+passbox env pull --env production -o .env.production
+```
+
+## Default Environment
+
+When `--env` is not specified, PassBox uses:
+
+1. The `environment` field from `.passbox.json` (if present)
+2. The `defaultEnvironment` from `~/.passbox/config.json`
+3. The vault's default environment (usually `development`)
+
+Set a default:
+
+```bash
+# Per-project (in .passbox.json)
+passbox init  # select environment during setup
+
+# Global
+passbox config set defaultEnvironment staging
+```

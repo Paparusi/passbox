@@ -1,0 +1,133 @@
+---
+title: CLI Installation
+description: Install and configure the PassBox CLI.
+---
+
+import { Tabs, TabItem } from '@astrojs/starlight/components';
+
+## Install
+
+<Tabs>
+  <TabItem label="npm">
+    ```bash
+    npm install -g pabox
+    ```
+  </TabItem>
+  <TabItem label="pnpm">
+    ```bash
+    pnpm add -g pabox
+    ```
+  </TabItem>
+  <TabItem label="yarn">
+    ```bash
+    yarn global add pabox
+    ```
+  </TabItem>
+</Tabs>
+
+:::note
+The npm package is `pabox`, but the CLI binary is `passbox`.
+:::
+
+## Verify Installation
+
+```bash
+passbox --version
+# 0.1.0
+```
+
+## Configuration
+
+PassBox stores configuration in `~/.passbox/`:
+
+| File | Purpose |
+|------|---------|
+| `~/.passbox/config.json` | Server URL, default vault, default environment |
+| `~/.passbox/auth.json` | Access token, refresh token, encrypted master key (mode 0600) |
+
+### Set Server URL
+
+```bash
+passbox config set server https://api.passbox.dev
+```
+
+### Set Default Vault
+
+```bash
+passbox config set defaultVault my-app
+```
+
+### Set Default Environment
+
+```bash
+passbox config set defaultEnvironment production
+```
+
+### View Current Config
+
+```bash
+passbox config get server
+passbox config get defaultVault
+```
+
+## Project Configuration
+
+Create a `.passbox.json` in your project root to set per-project defaults:
+
+```bash
+passbox init
+```
+
+This generates:
+
+```json
+{
+  "vault": "my-app",
+  "environment": "development"
+}
+```
+
+Project config takes precedence over global config. Add `.passbox.json` to version control so your team shares the same defaults.
+
+## Self-Hosted Server
+
+If running your own PassBox server:
+
+```bash
+passbox config set server https://your-passbox-server.com
+```
+
+Or set it per-project in `.passbox.json`:
+
+```json
+{
+  "vault": "my-app",
+  "server": "https://your-passbox-server.com"
+}
+```
+
+## Command Overview
+
+| Command | Description |
+|---------|-------------|
+| `passbox login` | Authenticate with email + password |
+| `passbox logout` | Clear local session |
+| `passbox whoami` | Show current user |
+| `passbox init` | Create project config |
+| `passbox vault` | Manage vaults (list, create, delete) |
+| `passbox get` | Retrieve a secret |
+| `passbox set` | Store a secret |
+| `passbox delete` | Delete a secret |
+| `passbox list` | List secrets in a vault |
+| `passbox history` | View secret version history |
+| `passbox env` | Push/pull .env files |
+| `passbox environment` | Manage environments |
+| `passbox import` | Import secrets from files |
+| `passbox run` | Run command with secrets injected |
+| `passbox member` | Manage vault members |
+| `passbox token` | Manage service tokens |
+| `passbox webhook` | Manage webhooks |
+| `passbox rotation` | Manage secret rotation |
+| `passbox account` | Account management |
+| `passbox config` | View/set CLI config |
+| `passbox serve` | Start MCP server |

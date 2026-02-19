@@ -1,0 +1,125 @@
+---
+title: MCP Server Setup
+description: Connect AI agents to PassBox secrets via Model Context Protocol.
+---
+
+import { Tabs, TabItem } from '@astrojs/starlight/components';
+
+## Overview
+
+PassBox provides an MCP (Model Context Protocol) server that lets AI agents securely access your secrets. The MCP server exposes 11 tools for reading, writing, and managing secrets — all with end-to-end encryption.
+
+## Prerequisites
+
+1. A PassBox account with at least one vault
+2. A service token (`pb_...`)
+
+Create a service token:
+
+```bash
+passbox token create --name "mcp-agent" --permissions read,write
+# Save the token: pb_abc123...
+```
+
+## Installation
+
+```bash
+npm install -g @pabox/mcp-server
+```
+
+## Configuration
+
+<Tabs>
+  <TabItem label="Claude Desktop">
+    Edit `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) or `%APPDATA%\Claude\claude_desktop_config.json` (Windows):
+
+    ```json
+    {
+      "mcpServers": {
+        "passbox": {
+          "command": "npx",
+          "args": ["-y", "@pabox/mcp-server"],
+          "env": {
+            "PASSBOX_TOKEN": "pb_your_service_token",
+            "PASSBOX_SERVER": "https://api.passbox.dev"
+          }
+        }
+      }
+    }
+    ```
+  </TabItem>
+  <TabItem label="Cursor">
+    Edit `.cursor/mcp.json` in your project root:
+
+    ```json
+    {
+      "mcpServers": {
+        "passbox": {
+          "command": "npx",
+          "args": ["-y", "@pabox/mcp-server"],
+          "env": {
+            "PASSBOX_TOKEN": "pb_your_service_token"
+          }
+        }
+      }
+    }
+    ```
+  </TabItem>
+  <TabItem label="Windsurf">
+    Edit `~/.codeium/windsurf/mcp_config.json`:
+
+    ```json
+    {
+      "mcpServers": {
+        "passbox": {
+          "command": "npx",
+          "args": ["-y", "@pabox/mcp-server"],
+          "env": {
+            "PASSBOX_TOKEN": "pb_your_service_token"
+          }
+        }
+      }
+    }
+    ```
+  </TabItem>
+  <TabItem label="CLI (passbox serve)">
+    If you have the PassBox CLI installed:
+
+    ```json
+    {
+      "mcpServers": {
+        "passbox": {
+          "command": "passbox",
+          "args": ["serve"],
+          "env": {
+            "PASSBOX_TOKEN": "pb_your_service_token"
+          }
+        }
+      }
+    }
+    ```
+  </TabItem>
+</Tabs>
+
+## Environment Variables
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `PASSBOX_TOKEN` | Yes | — | Service token (`pb_...`) |
+| `PASSBOX_SERVER` | No | `https://api.passbox.dev` | Server URL |
+
+## Verify Setup
+
+After configuring, ask your AI agent:
+
+> "List my PassBox vaults"
+
+The agent should call `passbox_list_vaults` and return your vault names.
+
+## Security Considerations
+
+- Service tokens have scoped permissions (read/write/delete)
+- The MCP server runs locally — secrets are decrypted on your machine
+- The `passbox_proxy_request` tool has SSRF protection (blocks localhost, private IPs)
+- AI agents see decrypted values only when they call `passbox_get_secret`
+- Use `passbox_proxy_request` for credential brokering (secrets injected without AI seeing raw values)

@@ -1,0 +1,82 @@
+---
+title: SDK — Vaults
+description: Create and manage vaults with the SDK.
+---
+
+## List Vaults
+
+```typescript
+const vaults = await pb.vaults.list();
+```
+
+Returns an array of `VaultData`:
+
+```typescript
+interface VaultData {
+  id: string;
+  name: string;
+  description: string | null;
+  created_at: string;
+  role: string;         // your role in this vault
+  encryptedVaultKey?: string;
+}
+```
+
+## Get a Vault
+
+```typescript
+const vault = await pb.vaults.get('vault-uuid');
+```
+
+Returns a single `VaultData` object.
+
+## Create a Vault
+
+```typescript
+const vault = await pb.vaults.create({
+  name: 'my-project',
+  description: 'Production secrets', // optional
+});
+```
+
+Creates a new vault with a random AES-256-GCM key, encrypted with your master key. A default `development` environment is created automatically.
+
+### Options
+
+```typescript
+interface CreateVaultOptions {
+  name: string;
+  description?: string;
+}
+```
+
+## Delete a Vault
+
+```typescript
+await pb.vaults.delete('vault-uuid');
+```
+
+Permanently deletes the vault and all its secrets. Requires `owner` role.
+
+## Set Default Vault
+
+```typescript
+pb.setDefaultVault('vault-uuid');
+
+// Now vault parameter is optional
+const value = await pb.secrets.get('API_KEY');
+```
+
+## Vault Name Resolution
+
+Most resource methods accept a vault name or UUID. The SDK resolves names to UUIDs automatically:
+
+```typescript
+// Both work:
+await pb.secrets.get('API_KEY', { vault: 'my-project' });
+await pb.secrets.get('API_KEY', { vault: '550e8400-e29b-...' });
+```
+
+If the `vault` parameter is omitted:
+1. Uses the default vault (set via `setDefaultVault`)
+2. Falls back to the first vault in your account

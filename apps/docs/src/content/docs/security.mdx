@@ -1,0 +1,93 @@
+---
+title: Security
+description: PassBox security model, practices, and vulnerability reporting.
+---
+
+## Zero-Knowledge Architecture
+
+PassBox is designed so that the server **never** has access to your plaintext secrets:
+
+- Master keys are derived client-side (Argon2id)
+- All secret values are encrypted client-side (AES-256-GCM)
+- Vault keys are shared via X25519 key exchange
+- The server stores only ciphertext
+
+Even with full database access, an attacker cannot decrypt your secrets without your password.
+
+## Cryptographic Primitives
+
+| Purpose | Algorithm | Security Level |
+|---------|-----------|---------------|
+| Key derivation | Argon2id (64MB, 3 iterations) | Memory-hard, resistant to GPU/ASIC attacks |
+| Symmetric encryption | AES-256-GCM | 256-bit security, authenticated encryption |
+| Key exchange | X25519 | 128-bit security, Curve25519 ECDH |
+
+Libraries: `@noble/hashes`, `@noble/ciphers`, `@noble/curves` — all audited by Cure53.
+
+## Server Security
+
+- **Rate limiting** — Auth: 5 req/min, API: 60 req/min, Waitlist: 10 req/min
+- **CORS** — Strict origin allowlist (passbox.dev only in production)
+- **Secure headers** — HSTS, X-Frame-Options, X-Content-Type-Options, etc.
+- **Input validation** — Zod schemas on all endpoints
+- **SSRF protection** — Webhook URLs must be HTTPS, no private IPs
+- **Stripe webhook verification** — HMAC-SHA256 signature with replay protection
+- **Graceful shutdown** — SIGTERM/SIGINT handlers for clean resource cleanup
+- **Environment validation** — Required env vars checked at startup
+
+## Database Security
+
+- **Row-Level Security (RLS)** — All tables have RLS policies via Supabase
+- **SECURITY DEFINER functions** — Prevent RLS recursion attacks
+- **Foreign key cascades** — Proper cleanup on delete
+- **Write-deny policies** — Waitlist and subscriptions tables
+- **Indexes** — Performance and security (prevent enumeration via timing)
+
+## Client Security
+
+- **Master key storage** — `~/.passbox/auth.json` with mode `0600` (owner only)
+- **Config directory** — `~/.passbox/` with mode `0700`
+- **No shell execution** — CLI `run` command does not use `shell: true`
+- **No plaintext fallbacks** — Web dashboard requires encryption password
+
+## Access Control
+
+| Role | Read | Write | Delete | Manage Members | Delete Vault |
+|------|------|-------|--------|---------------|-------------|
+| `viewer` | Yes | No | No | No | No |
+| `member` | Yes | Yes | No | No | No |
+| `admin` | Yes | Yes | Yes | Yes | No |
+| `owner` | Yes | Yes | Yes | Yes | Yes |
+
+- Owner role cannot be demoted by admins
+- Service token permissions: `read`, `write`, `delete` (configurable)
+
+## Reporting Vulnerabilities
+
+If you discover a security vulnerability, please report it responsibly:
+
+1. **Email**: security@passbox.dev
+2. **GitHub**: Open a [security advisory](https://github.com/Paparusi/passbox/security/advisories)
+
+Please include:
+- Description of the vulnerability
+- Steps to reproduce
+- Potential impact
+- Suggested fix (if any)
+
+We aim to respond within 48 hours and patch critical issues within 7 days.
+
+:::note
+Do **not** open public GitHub issues for security vulnerabilities. Use the private channels above.
+:::
+
+## Security Audit Status
+
+PassBox has undergone an internal comprehensive security audit covering:
+- Server route hardening (input validation, error handling)
+- Database schema fixes (RLS, FK cascades, indexes, constraints)
+- Client-side crypto validation (no fallbacks, proper key derivation)
+- SSRF protection (webhooks, MCP proxy)
+- Rate limiting and CORS configuration
+
+The `@noble` cryptographic libraries used by PassBox are independently audited by Cure53.

@@ -1,0 +1,73 @@
+---
+title: Authentication
+description: Login, register, and manage your PassBox session.
+---
+
+## Login
+
+```bash
+passbox login
+```
+
+Prompts for email and password interactively. On success:
+
+1. Authenticates with the server
+2. Derives your master key using Argon2id (from password + stored salt)
+3. Saves session to `~/.passbox/auth.json`
+
+The master key is stored locally so subsequent commands can encrypt/decrypt secrets without re-entering your password.
+
+### Options
+
+| Option | Description |
+|--------|-------------|
+| `--server <url>` | Override server URL |
+
+### Custom Server
+
+```bash
+passbox login --server https://your-server.com
+```
+
+## Logout
+
+```bash
+passbox logout
+```
+
+Clears the local session file (`~/.passbox/auth.json`). Does not invalidate server-side tokens.
+
+## Who Am I
+
+```bash
+passbox whoami
+```
+
+Displays the email of the currently logged-in user.
+
+## Session Persistence
+
+After login, your session is stored in `~/.passbox/auth.json` with file permissions `0600` (owner read/write only). The file contains:
+
+- Access token (JWT, expires periodically)
+- Refresh token (used to get new access tokens)
+- Email
+- Master key (base64-encoded, same security model as SSH keys)
+
+The CLI automatically refreshes expired access tokens using the refresh token.
+
+## Service Tokens
+
+For non-interactive authentication (CI/CD, scripts, MCP servers), use service tokens instead of login:
+
+```bash
+passbox token create --name "ci-deploy"
+```
+
+Set the token as an environment variable:
+
+```bash
+export PASSBOX_TOKEN=pb_abc123...
+```
+
+When `PASSBOX_TOKEN` is set, the CLI uses it instead of the session file.

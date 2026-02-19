@@ -1,0 +1,63 @@
+---
+title: Plans & Limits
+description: PassBox plan tiers and resource limits.
+---
+
+## Plan Comparison
+
+| Feature | Free | Pro | Team | Enterprise |
+|---------|------|-----|------|------------|
+| **Price** | $0 | Contact us | Contact us | Contact us |
+| **Vaults** | 3 | Unlimited | Unlimited | Unlimited |
+| **Secrets per vault** | 50 | Unlimited | Unlimited | Unlimited |
+| **Members per vault** | 2 | Unlimited | Unlimited | Unlimited |
+| **Environments per vault** | 3 | Unlimited | Unlimited | Unlimited |
+| **Audit log retention** | 7 days | 90 days | 365 days | Unlimited |
+| **Service tokens** | 1 | 50 | Unlimited | Unlimited |
+| **Encryption** | AES-256-GCM | AES-256-GCM | AES-256-GCM | AES-256-GCM |
+| **CLI** | Full | Full | Full | Full |
+| **SDK** | Full | Full | Full | Full |
+| **MCP Server** | Full | Full | Full | Full |
+| **GitHub Action** | Full | Full | Full | Full |
+
+## Free Tier Limits
+
+The free tier is fully functional with these limits:
+
+- **3 vaults** — enough for personal projects
+- **50 secrets per vault** — covers most applications
+- **2 members per vault** — you + 1 collaborator
+- **3 environments per vault** — dev, staging, production
+- **7-day audit retention** — recent activity
+- **1 service token** — for CI/CD or MCP
+
+## Limit Enforcement
+
+When you exceed a limit, the API returns a `403 PLAN_LIMIT` error:
+
+```json
+{
+  "success": false,
+  "error": {
+    "code": "PLAN_LIMIT",
+    "message": "Free plan allows 3 vaults. Upgrade to Pro for unlimited."
+  }
+}
+```
+
+Limits are enforced on:
+- Vault creation
+- Secret creation (single and bulk)
+- Member invitations
+- Environment creation
+- Service token creation
+
+Existing resources are never deleted when downgrading — you just can't create new ones until you're within limits.
+
+## All Plans Include
+
+- Zero-knowledge end-to-end encryption
+- Full CLI, SDK, MCP, and GitHub Action access
+- Web dashboard
+- HTTPS API
+- Community support via GitHub Issues

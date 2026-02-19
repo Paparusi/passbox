@@ -1,0 +1,145 @@
+---
+title: Quickstart
+description: Get up and running with PassBox in 5 minutes.
+---
+
+import { Steps, Tabs, TabItem } from '@astrojs/starlight/components';
+
+## Install the CLI
+
+<Tabs>
+  <TabItem label="npm">
+    ```bash
+    npm install -g pabox
+    ```
+  </TabItem>
+  <TabItem label="pnpm">
+    ```bash
+    pnpm add -g pabox
+    ```
+  </TabItem>
+  <TabItem label="yarn">
+    ```bash
+    yarn global add pabox
+    ```
+  </TabItem>
+</Tabs>
+
+The package is named `pabox` on npm, but the binary command is `passbox`.
+
+## Your First Secret
+
+<Steps>
+
+1. **Create an account**
+
+   ```bash
+   passbox login
+   ```
+
+   Enter your email and password. PassBox derives an encryption key from your password using Argon2id — this key never leaves your machine.
+
+2. **Create a vault**
+
+   ```bash
+   passbox vault create my-app
+   ```
+
+   A vault is a collection of secrets. Each vault has its own encryption key.
+
+3. **Store a secret**
+
+   ```bash
+   passbox set DATABASE_URL "postgres://user:pass@host:5432/db" --vault my-app
+   ```
+
+   The value is encrypted client-side with AES-256-GCM before being sent to the server.
+
+4. **Retrieve the secret**
+
+   ```bash
+   passbox get DATABASE_URL --vault my-app
+   ```
+
+   Output: `postgres://user:pass@host:5432/db`
+
+5. **List all secrets**
+
+   ```bash
+   passbox list --vault my-app
+   ```
+
+</Steps>
+
+## Run Your App with Secrets
+
+Inject secrets as environment variables into any command:
+
+```bash
+passbox run --vault my-app -- node server.js
+```
+
+This starts `node server.js` with all vault secrets available as `process.env.DATABASE_URL`, etc.
+
+## Work with .env Files
+
+Push a local `.env` file to your vault:
+
+```bash
+passbox env push .env --vault my-app
+```
+
+Pull secrets into a `.env` file:
+
+```bash
+passbox env pull --vault my-app -o .env.local
+```
+
+## Use Environments
+
+Separate your secrets by environment (development, staging, production):
+
+```bash
+# Create environments
+passbox environment create staging --vault my-app
+passbox environment create production --vault my-app
+
+# Store secrets in specific environments
+passbox set DATABASE_URL "postgres://staging-host/db" --vault my-app --env staging
+passbox set DATABASE_URL "postgres://prod-host/db" --vault my-app --env production
+
+# Retrieve from a specific environment
+passbox get DATABASE_URL --vault my-app --env production
+```
+
+## Project Configuration
+
+Initialize a `.passbox.json` in your project directory to set defaults:
+
+```bash
+passbox init
+```
+
+This creates a config file so you don't need to pass `--vault` every time:
+
+```json
+{
+  "vault": "my-app",
+  "environment": "development"
+}
+```
+
+Now you can simply run:
+
+```bash
+passbox get DATABASE_URL
+passbox set API_KEY "sk-..."
+passbox run -- npm start
+```
+
+## Next Steps
+
+- [Core Concepts](/getting-started/concepts/) — understand vaults, environments, and encryption
+- [CLI Reference](/cli/installation/) — explore all 21 commands
+- [SDK Guide](/sdk/installation/) — use PassBox programmatically
+- [MCP Server](/mcp/setup/) — connect AI agents to your secrets

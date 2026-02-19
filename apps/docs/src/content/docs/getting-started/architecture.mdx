@@ -1,0 +1,109 @@
+---
+title: Architecture
+description: How PassBox encryption works under the hood.
+---
+
+## Encryption Overview
+
+PassBox implements end-to-end encryption using three cryptographic primitives from the audited `@noble` library family (Cure53 audited):
+
+| Layer | Algorithm | Purpose |
+|-------|-----------|---------|
+| Key Derivation | **Argon2id** | Derive master key from password |
+| Symmetric Encryption | **AES-256-GCM** | Encrypt/decrypt secrets and keys |
+| Key Exchange | **X25519** | Share vault keys between team members |
+
+## Key Hierarchy
+
+```
+Password (user input)
+  │
+  ├─ Argon2id(password, salt, params) ──→ Master Key (32 bytes)
+  │     │
+  │     ├─ AES-256-GCM(masterKey) ──→ encrypts Private Key
+  │     ├─ AES-256-GCM(masterKey) ──→ encrypts Vault Keys
+  │     └─ Recovery Key ──→ AES-256-GCM backup of Master Key
+  │
+  └─ X25519 Key Pair
+        ├─ Public Key (stored on server)
+        └─ Private Key (encrypted, stored on server)
+
+Vault Key (random 32 bytes, per vault)
+  │
+  └─ AES-256-GCM(vaultKey) ──→ encrypts each Secret Value
+```
+
+## Registration Flow
+
+1. User provides email + password
+2. Client generates a random **salt** (32 bytes)
+3. Client derives **master key** via Argon2id:
+   - Iterations: 3
+   - Memory: 65536 KB (64 MB)
+   - Parallelism: 4
+   - Output: 32 bytes
+4. Client generates **X25519 key pair**
+5. Client encrypts private key with master key (AES-256-GCM)
+6. Client creates **recovery key** (random 24-word key that encrypts the master key)
+7. Client sends to server: email, password hash, public key, encrypted private key, encrypted recovery master key, salt, KDF params
+8. Server creates user account and stores encrypted key material
+
+## Login Flow
+
+1. User provides email + password
+2. Server authenticates and returns: JWT tokens + encrypted key material (public key, encrypted private key, salt, KDF params)
+3. Client re-derives master key from password + salt using same KDF params
+4. Master key is stored locally for the session (base64 in `~/.passbox/auth.json`, mode 0600)
+
+## Secret Encryption
+
+When you store a secret:
+
+1. Client fetches the vault's encrypted vault key
+2. Client decrypts vault key using master key
+3. Client encrypts the secret value with the vault key:
+   - Generate random 12-byte IV
+   - AES-256-GCM encrypt(vaultKey, iv, plaintext) → ciphertext + auth tag
+4. Client sends encrypted blob to server: `{iv, ciphertext, tag, algorithm: "aes-256-gcm"}`
+
+When you retrieve a secret:
+
+1. Client fetches encrypted blob from server
+2. Client decrypts vault key (cached after first use)
+3. Client decrypts: AES-256-GCM decrypt(vaultKey, iv, ciphertext, tag) → plaintext
+
+## Vault Sharing (X25519)
+
+When inviting a team member to a vault:
+
+1. Inviter fetches their own encrypted private key + the vault's encrypted vault key
+2. Inviter decrypts their private key with their master key
+3. Inviter decrypts the vault key with their master key
+4. Inviter fetches the **target user's public key** from the server
+5. Inviter performs X25519 key exchange: `sharedSecret = X25519(myPrivateKey, theirPublicKey)`
+6. Inviter encrypts vault key with the shared secret: `AES-256-GCM(sharedSecret, vaultKey)`
+7. Server stores the encrypted vault key for the new member
+8. New member can later decrypt using their own private key + inviter's public key
+
+## What the Server Stores
+
+| Data | Encrypted? | Can server read? |
+|------|-----------|-----------------|
+| Email | No | Yes |
+| Password hash | Bcrypt (by Supabase Auth) | No (one-way) |
+| Public key | No | Yes |
+| Private key | AES-256-GCM (master key) | No |
+| Master key (recovery) | AES-256-GCM (recovery key) | No |
+| KDF salt + params | No | Yes (needed for key derivation) |
+| Vault keys | AES-256-GCM (master key) | No |
+| Secret values | AES-256-GCM (vault key) | No |
+| Secret names | No | Yes |
+| Vault names | No | Yes |
+
+## Libraries Used
+
+- [`@noble/hashes`](https://github.com/paulmillr/noble-hashes) — Argon2id, HKDF
+- [`@noble/ciphers`](https://github.com/paulmillr/noble-ciphers) — AES-256-GCM
+- [`@noble/curves`](https://github.com/paulmillr/noble-curves) — X25519
+
+All three libraries are audited by Cure53 and have zero dependencies.

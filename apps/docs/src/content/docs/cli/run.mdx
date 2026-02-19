@@ -1,0 +1,132 @@
+---
+title: Running Commands
+description: Inject secrets as environment variables and manage .env files.
+---
+
+## Run with Secrets
+
+```bash
+passbox run [options] -- <command>
+```
+
+Executes a command with all vault secrets injected as environment variables. Secrets are decrypted in memory and passed to the child process — they are never written to disk.
+
+### Options
+
+| Option | Description |
+|--------|-------------|
+| `--vault <name>` | Vault name or ID |
+| `--env <name>` | Environment name |
+
+### Examples
+
+```bash
+# Run Node.js app with secrets
+passbox run --vault my-app -- node server.js
+
+# Run with production secrets
+passbox run --vault my-app --env production -- npm start
+
+# Run any command
+passbox run -- docker compose up
+
+# Use with project config (.passbox.json)
+passbox run -- python manage.py runserver
+```
+
+### How It Works
+
+1. PassBox fetches all secrets from the vault (and environment)
+2. Decrypts each secret value client-side
+3. Spawns the child process with secrets as environment variables
+4. Existing environment variables are preserved; vault secrets are merged in
+
+:::tip
+Secrets injected by `passbox run` are available as `process.env.SECRET_NAME` in Node.js, `os.environ['SECRET_NAME']` in Python, `$SECRET_NAME` in shell scripts, etc.
+:::
+
+## Push .env to Vault
+
+```bash
+passbox env push <file> [options]
+```
+
+Reads a local `.env` file and imports all key-value pairs as secrets in the vault.
+
+### Options
+
+| Option | Description |
+|--------|-------------|
+| `--vault <name>` | Vault name or ID |
+| `--env <name>` | Target environment name |
+
+### Example
+
+```bash
+passbox env push .env --vault my-app
+passbox env push .env.production --vault my-app --env production
+```
+
+## Pull Secrets to .env
+
+```bash
+passbox env pull [options]
+```
+
+Exports all secrets from a vault as a `.env` file.
+
+### Options
+
+| Option | Description |
+|--------|-------------|
+| `--vault <name>` | Vault name or ID |
+| `--env <name>` | Environment name |
+| `-o, --output <file>` | Output file path (default: stdout) |
+
+### Examples
+
+```bash
+# Print to stdout
+passbox env pull --vault my-app
+
+# Save to file
+passbox env pull --vault my-app -o .env.local
+
+# Pull production secrets
+passbox env pull --env production -o .env.production
+```
+
+:::caution
+Add `.env*` to your `.gitignore` to avoid committing secrets to version control.
+:::
+
+## Import from Files
+
+```bash
+passbox import <format> <file> [options]
+```
+
+Import secrets from various file formats.
+
+### Supported Formats
+
+| Format | Command | File Format |
+|--------|---------|-------------|
+| `.env` | `passbox import dotenv .env` | `KEY=value` |
+| JSON | `passbox import json secrets.json` | `{"KEY": "value"}` |
+| CSV | `passbox import csv secrets.csv` | `name,value,description` |
+
+### Options
+
+| Option | Description |
+|--------|-------------|
+| `--vault <name>` | Vault name or ID |
+| `--env <name>` | Target environment name |
+
+### Examples
+
+```bash
+passbox import dotenv .env.production --env production
+passbox import json secrets.json --vault my-app
+passbox import csv export.csv --vault my-app --env staging
+```

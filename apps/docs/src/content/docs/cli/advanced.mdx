@@ -1,0 +1,163 @@
+---
+title: Advanced CLI
+description: Webhooks, rotation, account management, and other advanced commands.
+---
+
+## Webhooks
+
+Webhooks send HTTP notifications when secrets change.
+
+### List Webhooks
+
+```bash
+passbox webhook list [options]
+```
+
+| Option | Description |
+|--------|-------------|
+| `--vault <name>` | Vault name or ID |
+
+### Create a Webhook
+
+```bash
+passbox webhook create [options]
+```
+
+| Option | Description |
+|--------|-------------|
+| `--vault <name>` | Vault name or ID |
+| `--name <name>` | Webhook name |
+| `--url <url>` | HTTPS endpoint URL |
+| `--events <events>` | Comma-separated: `secret.created`, `secret.updated`, `secret.deleted`, `secret.rotated` |
+
+```bash
+passbox webhook create \
+  --vault my-app \
+  --name "slack-notify" \
+  --url "https://hooks.slack.com/..." \
+  --events "secret.created,secret.updated"
+```
+
+### Update a Webhook
+
+```bash
+passbox webhook update <id> [options]
+```
+
+| Option | Description |
+|--------|-------------|
+| `--url <url>` | New URL |
+| `--events <events>` | New events |
+| `--active <bool>` | Enable/disable |
+
+### Delete a Webhook
+
+```bash
+passbox webhook delete <id> [options]
+```
+
+### Test a Webhook
+
+```bash
+passbox webhook test <id> [options]
+```
+
+Sends a test event to the webhook URL.
+
+## Secret Rotation
+
+Configure automatic rotation tracking for secrets.
+
+### Get Rotation Config
+
+```bash
+passbox rotation get <secret-name> [options]
+```
+
+| Option | Description |
+|--------|-------------|
+| `--vault <name>` | Vault name or ID |
+
+### Set Rotation Config
+
+```bash
+passbox rotation set <secret-name> [options]
+```
+
+| Option | Description |
+|--------|-------------|
+| `--vault <name>` | Vault name or ID |
+| `--interval <hours>` | Rotation interval in hours (default: 720 = 30 days) |
+| `--webhook <id>` | Webhook to notify on rotation |
+
+```bash
+passbox rotation set API_KEY --vault my-app --interval 168  # weekly
+```
+
+### Remove Rotation
+
+```bash
+passbox rotation remove <secret-name> [options]
+```
+
+### Trigger Manual Rotation
+
+```bash
+passbox rotation trigger <secret-name> [options]
+```
+
+Fires the `secret.rotated` webhook event immediately.
+
+## Account Management
+
+### Delete Account
+
+```bash
+passbox account delete
+```
+
+Permanently deletes your account and all associated data. Requires confirmation.
+
+:::caution
+This action is irreversible. All your vaults, secrets, and settings will be permanently deleted.
+:::
+
+## Configuration
+
+### Get Config Value
+
+```bash
+passbox config get <key>
+```
+
+Available keys: `server`, `defaultVault`, `defaultEnvironment`
+
+### Set Config Value
+
+```bash
+passbox config set <key> <value>
+```
+
+```bash
+passbox config set server https://api.passbox.dev
+passbox config set defaultVault my-app
+passbox config set defaultEnvironment production
+```
+
+## MCP Server
+
+### Start MCP Server
+
+```bash
+passbox serve
+```
+
+Starts the PassBox MCP server in stdio mode for use with AI tools like Claude Desktop, Cursor, or Windsurf. See [MCP Setup](/mcp/setup/) for configuration details.
+
+## Who Am I
+
+```bash
+passbox whoami
+```
+
+Displays the email of the currently authenticated user.

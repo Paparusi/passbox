@@ -1,0 +1,140 @@
+---
+title: Encryption Specification
+description: Detailed cryptographic specification for PassBox.
+---
+
+## Overview
+
+PassBox uses a layered encryption architecture with three cryptographic primitives:
+
+| Primitive | Algorithm | Library | Purpose |
+|-----------|-----------|---------|---------|
+| KDF | Argon2id | `@noble/hashes` | Password → Master Key |
+| Symmetric | AES-256-GCM | `@noble/ciphers` | Encrypt/decrypt data |
+| Asymmetric | X25519 | `@noble/curves` | Key exchange (vault sharing) |
+
+All libraries are from the `@noble` family, audited by Cure53 with zero dependencies.
+
+## Argon2id Key Derivation
+
+Derives a 32-byte master key from the user's password.
+
+| Parameter | Value |
+|-----------|-------|
+| Algorithm | Argon2id |
+| Salt | 32 random bytes (per user) |
+| Iterations (t) | 3 |
+| Memory (m) | 65536 KB (64 MB) |
+| Parallelism (p) | 4 |
+| Output length | 32 bytes |
+
+```
+masterKey = argon2id(password, salt, {t: 3, m: 65536, p: 4, dkLen: 32})
+```
+
+The salt and KDF parameters are stored on the server (not secret — they're inputs to the KDF, not outputs).
+
+## AES-256-GCM Encryption
+
+All symmetric encryption uses AES-256-GCM with a random IV.
+
+| Parameter | Value |
+|-----------|-------|
+| Algorithm | AES-256-GCM |
+| Key length | 256 bits (32 bytes) |
+| IV length | 96 bits (12 bytes, random) |
+| Tag length | 128 bits (16 bytes) |
+
+### Encrypted Blob Format
+
+```typescript
+interface EncryptedBlob {
+  iv: string;         // base64-encoded 12-byte IV
+  ciphertext: string; // base64-encoded ciphertext
+  tag: string;        // base64-encoded 16-byte auth tag
+  algorithm: 'aes-256-gcm';
+}
+```
+
+This format is used for:
+- Secret values (encrypted with vault key)
+- Private keys (encrypted with master key)
+- Vault keys (encrypted with master key or shared secret)
+- Recovery master key (encrypted with recovery key)
+
+## X25519 Key Exchange
+
+Used to share vault keys between team members.
+
+| Parameter | Value |
+|-----------|-------|
+| Algorithm | X25519 (Curve25519 ECDH) |
+| Private key | 32 bytes (random) |
+| Public key | 32 bytes (derived from private key) |
+| Shared secret | 32 bytes (ECDH output, used as AES key) |
+
+### Vault Sharing Flow
+
+```
+Inviter:
+  sharedSecret = X25519(inviterPrivateKey, targetPublicKey)
+  encryptedVaultKey = AES-256-GCM(sharedSecret, vaultKey)
+  → store encryptedVaultKey for target user
+
+Target user:
+  sharedSecret = X25519(targetPrivateKey, inviterPublicKey)
+  vaultKey = AES-256-GCM-decrypt(sharedSecret, encryptedVaultKey)
+```
+
+Both parties derive the same shared secret from their own private key and the other's public key (ECDH property).
+
+## Key Hierarchy
+
+```
+User Password
+  └─ Argon2id ─→ Master Key (32 bytes)
+       ├─ encrypts: User Private Key (X25519)
+       ├─ encrypts: Vault Keys (one per vault)
+       └─ encrypted by: Recovery Key
+
+Recovery Key (random, shown once)
+  └─ encrypts: Master Key backup
+
+Vault Key (random 32 bytes, per vault)
+  └─ encrypts: Secret Values (AES-256-GCM)
+
+X25519 Key Pair
+  ├─ Public Key (stored plaintext on server)
+  └─ Private Key (encrypted with Master Key)
+```
+
+## Recovery Key
+
+- Generated during registration
+- 24-word format (base64-encoded random bytes)
+- Encrypts the master key with AES-256-GCM
+- Stored on the server (encrypted master key blob)
+- Used to restore master key if password is forgotten
+
+## What is NOT Encrypted
+
+| Data | Reason |
+|------|--------|
+| Secret names | Used for indexing and lookup |
+| Vault names | Used for indexing and lookup |
+| Tags and descriptions | Metadata for organization |
+| Timestamps | Audit trail |
+| Email addresses | Authentication |
+| KDF salt and params | Required to derive master key |
+| Public keys | Required for key exchange |
+
+## Threat Model
+
+| Threat | Mitigation |
+|--------|-----------|
+| Server database breach | Only ciphertext stored; AES-256-GCM is computationally secure |
+| Server admin is malicious | Zero-knowledge: server never has master key or plaintext |
+| Man-in-the-middle | HTTPS/TLS for transport; E2E encryption for data |
+| Password brute force | Argon2id (memory-hard, 64MB per attempt); Supabase bcrypt for auth |
+| Stolen device | Master key in `auth.json` with 0600 permissions; user should logout |
+| Team member removed | Vault key re-encryption recommended (manual process) |

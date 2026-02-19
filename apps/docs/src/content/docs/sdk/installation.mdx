@@ -1,0 +1,118 @@
+---
+title: SDK Installation
+description: Install and set up the PassBox TypeScript SDK.
+---
+
+import { Tabs, TabItem } from '@astrojs/starlight/components';
+
+## Install
+
+<Tabs>
+  <TabItem label="npm">
+    ```bash
+    npm install @pabox/sdk
+    ```
+  </TabItem>
+  <TabItem label="pnpm">
+    ```bash
+    pnpm add @pabox/sdk
+    ```
+  </TabItem>
+  <TabItem label="yarn">
+    ```bash
+    yarn add @pabox/sdk
+    ```
+  </TabItem>
+</Tabs>
+
+## Quick Start
+
+```typescript
+import { PassBox } from '@pabox/sdk';
+
+// Option 1: Service token (recommended for servers/CI)
+const pb = new PassBox({
+  token: 'pb_your_service_token',
+});
+
+// Option 2: Login with email + password
+const pb = await PassBox.login({
+  email: 'you@example.com',
+  password: 'your-password',
+});
+
+// Store a secret
+await pb.secrets.set('DATABASE_URL', 'postgres://...', {
+  vault: 'my-app',
+});
+
+// Retrieve a secret
+const value = await pb.secrets.get('DATABASE_URL', {
+  vault: 'my-app',
+});
+console.log(value); // postgres://...
+```
+
+## Configuration
+
+```typescript
+const pb = new PassBox({
+  serverUrl: 'https://api.passbox.dev', // default
+  token: 'pb_...', // optional service token
+});
+```
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `serverUrl` | `string` | `https://api.passbox.dev` | Server URL |
+| `token` | `string` | — | Service token for machine auth |
+
+## Default Vault
+
+Set a default vault to avoid passing `vault` on every call:
+
+```typescript
+pb.setDefaultVault('vault-uuid-here');
+
+// Now these work without specifying vault
+await pb.secrets.get('API_KEY');
+await pb.secrets.set('API_KEY', 'new-value');
+```
+
+If no default vault is set and no vault is specified, the SDK auto-selects the first vault in your account.
+
+## TypeScript Types
+
+All types are exported for use in your code:
+
+```typescript
+import type {
+  VaultData,
+  CreateVaultOptions,
+  SecretData,
+  GetSecretOptions,
+  SetSecretOptions,
+  EnvironmentData,
+  MemberData,
+  WebhookData,
+  ServiceTokenData,
+  EncryptedBlob,
+} from '@pabox/sdk';
+```
+
+## Resources
+
+The `PassBox` instance exposes these resource objects:
+
+| Resource | Description |
+|----------|-------------|
+| `pb.vaults` | Vault CRUD operations |
+| `pb.secrets` | Secret get/set/delete/list |
+| `pb.environments` | Environment management |
+| `pb.env` | .env file parsing and import |
+| `pb.importers` | Import from .env/JSON/CSV |
+| `pb.members` | Vault member management |
+| `pb.webhooks` | Webhook CRUD |
+| `pb.rotation` | Secret rotation config |
+| `pb.tokens` | Service token management |
+| `pb.account` | Account operations |

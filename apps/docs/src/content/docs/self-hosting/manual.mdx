@@ -1,0 +1,155 @@
+---
+title: Manual Setup
+description: Self-host PassBox without Docker.
+---
+
+## Prerequisites
+
+- Node.js 20+
+- A Supabase project
+- A server or cloud platform (Railway, Fly.io, Render, AWS, etc.)
+
+## 1. Clone and Build
+
+```bash
+git clone https://github.com/Paparusi/passbox.git
+cd passbox
+pnpm install
+pnpm build
+```
+
+## 2. Set Up Supabase
+
+Create a Supabase project and run migrations:
+
+```bash
+# Link to your Supabase project
+supabase link --project-ref your-project-ref
+
+# Apply all migrations
+supabase db push
+```
+
+## 3. Configure Environment
+
+Set environment variables on your server:
+
+```bash
+# Required
+export PORT=3456
+export NODE_ENV=production
+export SUPABASE_URL=https://your-project.supabase.co
+export SUPABASE_SERVICE_ROLE_KEY=eyJ...
+export SUPABASE_ANON_KEY=eyJ...
+
+# Optional
+export STRIPE_SECRET_KEY=sk_live_...
+export STRIPE_WEBHOOK_SECRET=whsec_...
+export EXTRA_CORS_ORIGINS=https://your-dashboard.com
+```
+
+## 4. Start the Server
+
+```bash
+cd apps/server
+node dist/index.js
+```
+
+The server starts on the configured `PORT` (default: 3456).
+
+## Platform-Specific Guides
+
+### Railway
+
+```bash
+# Install Railway CLI
+npm install -g @railway/cli
+
+# Login and link
+railway login
+railway link
+
+# Set environment variables
+railway variables set SUPABASE_URL=...
+railway variables set SUPABASE_SERVICE_ROLE_KEY=...
+railway variables set SUPABASE_ANON_KEY=...
+
+# Deploy
+railway up
+```
+
+### Fly.io
+
+Create a `fly.toml`:
+
+```toml
+app = "passbox-api"
+
+[build]
+  builder = "heroku/buildpacks:20"
+
+[env]
+  PORT = "3456"
+  NODE_ENV = "production"
+
+[[services]]
+  internal_port = 3456
+  protocol = "tcp"
+
+  [[services.ports]]
+    port = 443
+    handlers = ["tls", "http"]
+```
+
+```bash
+fly launch
+fly secrets set SUPABASE_URL=... SUPABASE_SERVICE_ROLE_KEY=... SUPABASE_ANON_KEY=...
+fly deploy
+```
+
+### Render
+
+1. Connect your GitHub repo
+2. Set build command: `pnpm install && pnpm build --filter @pabox/server`
+3. Set start command: `node apps/server/dist/index.js`
+4. Add environment variables in the dashboard
+
+## 5. Deploy the Web Dashboard (Optional)
+
+The web dashboard is a Next.js app that can be deployed to Vercel:
+
+```bash
+cd apps/web
+vercel deploy --prod
+```
+
+Set the `NEXT_PUBLIC_API_URL` environment variable to your server URL.
+
+## 6. Configure GitHub OAuth (Optional)
+
+To enable GitHub login:
+
+1. Create a GitHub OAuth App at **Settings > Developer settings > OAuth Apps**
+2. Set callback URL to: `https://your-supabase-project.supabase.co/auth/v1/callback`
+3. In Supabase dashboard, go to **Authentication > Providers > GitHub**
+4. Enter your Client ID and Client Secret
+
+## Health Check
+
+Verify your deployment:
+
+```bash
+curl https://your-server.com/api/v1/health
+```
+
+Expected response:
+
+```json
+{
+  "success": true,
+  "data": {
+    "status": "healthy",
+    "database": "connected"
+  }
+}
+```

@@ -1,0 +1,148 @@
+---
+title: Docker Setup
+description: Self-host PassBox using Docker Compose.
+---
+
+## Prerequisites
+
+- Docker and Docker Compose
+- A Supabase project (for PostgreSQL + Auth)
+
+## Docker Compose
+
+Create a `docker-compose.yml`:
+
+```yaml
+version: '3.8'
+
+services:
+  passbox-api:
+    image: node:20-alpine
+    working_dir: /app
+    command: node dist/index.js
+    ports:
+      - "3456:3456"
+    environment:
+      - PORT=3456
+      - NODE_ENV=production
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
+      - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
+      - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY:-}
+      - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET:-}
+      - EXTRA_CORS_ORIGINS=${EXTRA_CORS_ORIGINS:-}
+    volumes:
+      - ./server-dist:/app
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3456/api/v1/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+```
+
+## Environment Variables
+
+Create a `.env` file:
+
+```bash
+# Required
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=eyJ...
+SUPABASE_ANON_KEY=eyJ...
+
+# Optional (for billing)
+STRIPE_SECRET_KEY=sk_live_...
+STRIPE_WEBHOOK_SECRET=whsec_...
+
+# Optional (additional CORS origins)
+EXTRA_CORS_ORIGINS=https://your-dashboard.com
+```
+
+## Supabase Setup
+
+1. Create a new Supabase project at [supabase.com](https://supabase.com)
+2. Run the database migrations in order:
+
+```bash
+# Apply migrations to your Supabase project
+supabase db push
+```
+
+Or manually run each migration file from `supabase/migrations/`:
+- `001_initial.sql` — Core tables (orgs, vaults, secrets, etc.)
+- `002_fix_rls_recursion.sql` — RLS policy fixes
+- `003_billing_and_waitlist.sql` — Billing tables
+- `004_environments.sql` — Environments table
+- `005_rotation_webhooks.sql` — Webhooks and rotation
+- `006_schema_fixes.sql` — Security hardening
+
+3. Get your project credentials from **Settings > API**:
+   - `SUPABASE_URL` — Project URL
+   - `SUPABASE_SERVICE_ROLE_KEY` — Service role key (admin access)
+   - `SUPABASE_ANON_KEY` — Anonymous key
+
+## Build the Server
+
+```bash
+# Clone the repo
+git clone https://github.com/Paparusi/passbox.git
+cd passbox
+
+# Install dependencies and build
+pnpm install
+pnpm build --filter @pabox/server
+
+# Copy dist to your server
+cp -r apps/server/dist ./server-dist
+```
+
+## Start
+
+```bash
+docker compose up -d
+```
+
+Verify:
+
+```bash
+curl http://localhost:3456/api/v1/health
+# {"success":true,"data":{"status":"healthy","database":"connected"}}
+```
+
+## Configure Clients
+
+Point the CLI and SDK to your self-hosted server:
+
+```bash
+# CLI
+passbox config set server http://localhost:3456
+
+# SDK
+const pb = new PassBox({
+  serverUrl: 'http://localhost:3456',
+  token: 'pb_...',
+});
+```
+
+## HTTPS
+
+For production, put the API behind a reverse proxy (nginx, Caddy, Traefik) with TLS:
+
+```nginx
+server {
+    listen 443 ssl;
+    server_name api.your-domain.com;
+
+    ssl_certificate /etc/ssl/cert.pem;
+    ssl_certificate_key /etc/ssl/key.pem;
+
+    location / {
+        proxy_pass http://localhost:3456;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+```

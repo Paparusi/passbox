@@ -1,0 +1,104 @@
+---
+title: SDK Authentication
+description: Authenticate with PassBox using the SDK.
+---
+
+## Login with Email + Password
+
+```typescript
+import { PassBox } from '@pabox/sdk';
+
+const pb = await PassBox.login({
+  email: 'you@example.com',
+  password: 'your-password',
+  serverUrl: 'https://api.passbox.dev', // optional
+});
+```
+
+Login derives the master key client-side using Argon2id and the stored KDF parameters. This enables full encryption/decryption capabilities.
+
+## Register a New Account
+
+```typescript
+const { passbox, recoveryKey } = await PassBox.register({
+  email: 'you@example.com',
+  password: 'your-password',
+  serverUrl: 'https://api.passbox.dev', // optional
+});
+
+// IMPORTANT: Show recoveryKey to the user and ask them to save it
+console.log('Recovery key:', recoveryKey);
+// Use passbox instance for subsequent operations
+```
+
+Registration:
+1. Generates a random salt
+2. Derives master key via Argon2id
+3. Generates X25519 key pair
+4. Encrypts private key with master key
+5. Creates a recovery key (encrypts master key)
+6. Sends everything to the server
+
+:::caution
+The recovery key is shown only once. If the user loses both their password and recovery key, their secrets are permanently inaccessible (by design — zero-knowledge).
+:::
+
+## Service Token Authentication
+
+For servers, CI/CD pipelines, and MCP servers, use a service token:
+
+```typescript
+const pb = new PassBox({
+  token: 'pb_your_service_token',
+});
+
+// Service tokens can read/write secrets based on their permissions
+const value = await pb.secrets.get('API_KEY');
+```
+
+Service tokens carry an encrypted copy of the master key, so they can decrypt secrets without a password.
+
+### Create a Service Token
+
+```typescript
+// First, login with email/password
+const pb = await PassBox.login({ email, password });
+
+// Create a token
+const result = await pb.tokens.create({
+  name: 'ci-deploy',
+  permissions: ['read'],
+  vaultId: 'vault-uuid', // optional: scope to vault
+});
+
+console.log(result.token); // pb_abc123... — save this
+```
+
+## Master Key Management
+
+For advanced use cases, you can manage the master key directly:
+
+```typescript
+// Set master key from external source
+pb.setMasterKey(masterKeyUint8Array);
+
+// Get current master key (for persistence)
+const key = pb.getMasterKey(); // Uint8Array | null
+```
+
+## Raw API Requests
+
+For endpoints not covered by resource classes:
+
+```typescript
+// GET request
+const data = await pb.request('/vaults');
+
+// POST request
+const result = await pb.request('/vaults', {
+  method: 'POST',
+  body: { name: 'new-vault' },
+});
+```
+
+Paths are relative to `/api/v1`. Authentication headers are added automatically.

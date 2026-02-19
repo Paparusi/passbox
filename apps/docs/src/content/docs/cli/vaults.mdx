@@ -1,0 +1,83 @@
+---
+title: Vaults
+description: Create and manage secret vaults.
+---
+
+## List Vaults
+
+```bash
+passbox vault list
+```
+
+Shows all vaults you have access to, with your role in each.
+
+## Create a Vault
+
+```bash
+passbox vault create <name>
+```
+
+Creates a new vault with the given name. A default `development` environment is created automatically.
+
+### Example
+
+```bash
+passbox vault create my-app
+# ✓ Vault "my-app" created
+```
+
+## Delete a Vault
+
+```bash
+passbox vault delete <name>
+```
+
+Permanently deletes a vault and all its secrets, environments, and members. Requires `owner` role.
+
+:::caution
+This action is irreversible. All secrets in the vault will be permanently deleted.
+:::
+
+### Example
+
+```bash
+passbox vault delete old-project
+# Are you sure? (y/N): y
+# ✓ Vault "old-project" deleted
+```
+
+## Initialize Project
+
+```bash
+passbox init
+```
+
+Creates a `.passbox.json` file in the current directory, linking the project to a vault. You'll be prompted to select a vault from your list.
+
+### Example `.passbox.json`
+
+```json
+{
+  "vault": "my-app",
+  "environment": "development"
+}
+```
+
+Once initialized, you can omit the `--vault` flag from other commands:
+
+```bash
+# Before init
+passbox get API_KEY --vault my-app
+
+# After init
+passbox get API_KEY
+```
+
+## Vault Roles
+
+| Role | Read | Write | Delete | Manage Members | Delete Vault |
+|------|------|-------|--------|---------------|-------------|
+| `viewer` | Yes | No | No | No | No |
+| `member` | Yes | Yes | No | No | No |
+| `admin` | Yes | Yes | Yes | Yes | No |
+| `owner` | Yes | Yes | Yes | Yes | Yes |

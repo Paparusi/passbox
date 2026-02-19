@@ -1,0 +1,80 @@
+---
+title: PassBox
+description: Zero-knowledge secrets management for developers and AI agents.
+template: splash
+hero:
+  tagline: Open-source, zero-knowledge secrets management. CLI-native, SDK-ready, AI agent-friendly.
+  actions:
+    - text: Get Started
+      link: /getting-started/quickstart/
+      icon: right-arrow
+      variant: primary
+    - text: View on GitHub
+      link: https://github.com/Paparusi/passbox
+      icon: external
+      variant: minimal
+---
+
+import { Card, CardGrid } from '@astrojs/starlight/components';
+
+## Why PassBox?
+
+PassBox is a **zero-knowledge** secrets management platform. Your secrets are encrypted client-side before they ever leave your machine — the server never sees plaintext values.
+
+<CardGrid>
+  <Card title="Zero-Knowledge Encryption" icon="lock">
+    End-to-end encryption with Argon2id, AES-256-GCM, and X25519. The server never sees your secrets in plaintext.
+  </Card>
+  <Card title="CLI-Native" icon="terminal">
+    21 commands covering every operation — vaults, secrets, environments, teams, webhooks, and more.
+  </Card>
+  <Card title="AI Agent Ready" icon="puzzle">
+    MCP server with 11 tools lets AI agents (Claude, Cursor, Windsurf) securely access secrets without exposing values.
+  </Card>
+  <Card title="Developer SDK" icon="open-book">
+    TypeScript/Node.js SDK (`@pabox/sdk`) for programmatic access. GitHub Action for CI/CD pipelines.
+  </Card>
+</CardGrid>
+
+## Quick Example
+
+```bash
+# Install the CLI
+npm install -g pabox
+
+# Register and create your first vault
+passbox login
+passbox vault create my-app
+
+# Store and retrieve secrets
+passbox set DATABASE_URL "postgres://..." --vault my-app
+passbox get DATABASE_URL --vault my-app
+
+# Run your app with secrets injected
+passbox run --vault my-app -- node server.js
+
+# Push/pull .env files
+passbox env push .env --vault my-app
+passbox env pull --vault my-app -o .env.local
+```
+
+## How It Works
+
+1. **You set a password** — PassBox derives a master key using Argon2id (memory-hard KDF)
+2. **Secrets are encrypted client-side** — AES-256-GCM encryption before any network request
+3. **Vault keys are shared via X25519** — team members get access through Diffie-Hellman key exchange
+4. **The server stores only ciphertext** — even if the database is compromised, secrets remain safe
+
+## Platform Components
+
+| Component | Package | Description |
+|-----------|---------|-------------|
+| CLI | `pabox` | Command-line tool (`passbox` binary) |
+| SDK | `@pabox/sdk` | TypeScript SDK for Node.js |
+| MCP Server | `@pabox/mcp-server` | AI agent integration |
+| GitHub Action | `Paparusi/passbox` | CI/CD secrets injection |
+| Web Dashboard | [passbox.dev](https://passbox.dev) | Browser-based management |
+
+## Open Source
+
+PassBox is **MIT licensed** and fully open source. Self-host it or use the managed service at [passbox.dev](https://passbox.dev).

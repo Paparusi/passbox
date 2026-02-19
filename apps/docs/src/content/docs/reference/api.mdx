@@ -1,0 +1,233 @@
+---
+title: REST API Reference
+description: Complete API endpoint reference for PassBox.
+---
+
+## Base URL
+
+```
+https://api.passbox.dev/api/v1
+```
+
+All requests use JSON. Protected endpoints require an `Authorization: Bearer <token>` header.
+
+## Authentication
+
+### Public Endpoints
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/auth/register` | Register new account |
+| `POST` | `/auth/login` | Login with email + password |
+| `POST` | `/auth/refresh` | Refresh access token |
+| `GET` | `/auth/recovery-info` | Get recovery key info |
+| `POST` | `/auth/recover` | Recover account with recovery key |
+
+### Protected Auth Endpoints
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/auth/keys` | Get user's encryption keys |
+| `POST` | `/auth/setup-keys` | Set up encryption keys (OAuth users) |
+| `POST` | `/auth/change-password` | Change password |
+| `DELETE` | `/auth/delete-account` | Delete account |
+| `GET` | `/auth/service-tokens` | List service tokens |
+| `POST` | `/auth/service-token` | Create service token |
+| `DELETE` | `/auth/service-token/:id` | Revoke service token |
+
+## Vaults
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/vaults` | List vaults |
+| `POST` | `/vaults` | Create vault |
+| `GET` | `/vaults/:id` | Get vault |
+| `DELETE` | `/vaults/:id` | Delete vault (owner only) |
+
+### Create Vault
+
+```json
+POST /vaults
+{
+  "name": "my-app",
+  "description": "Production secrets",
+  "encryptedVaultKey": "{...}"
+}
+```
+
+## Secrets
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/vaults/:vaultId/secrets` | List secrets |
+| `POST` | `/vaults/:vaultId/secrets` | Create secret |
+| `GET` | `/vaults/:vaultId/secrets/:name` | Get secret by name |
+| `PUT` | `/vaults/:vaultId/secrets/:name` | Update secret |
+| `DELETE` | `/vaults/:vaultId/secrets/:name` | Delete secret |
+| `GET` | `/vaults/:vaultId/secrets/:name/versions` | Get version history |
+| `POST` | `/vaults/:vaultId/secrets/bulk` | Bulk create/update |
+
+### Query Parameters
+
+All secret endpoints accept `?environmentId=<uuid>` to target a specific environment.
+
+### Create Secret
+
+```json
+POST /vaults/:vaultId/secrets
+{
+  "name": "DATABASE_URL",
+  "encryptedValue": {
+    "iv": "base64...",
+    "ciphertext": "base64...",
+    "tag": "base64...",
+    "algorithm": "aes-256-gcm"
+  },
+  "description": "Main database",
+  "tags": ["database"],
+  "environmentId": "uuid"
+}
+```
+
+### Bulk Create/Update
+
+```json
+POST /vaults/:vaultId/secrets/bulk
+{
+  "secrets": [
+    {
+      "name": "KEY1",
+      "encryptedValue": { "iv": "...", "ciphertext": "...", "tag": "...", "algorithm": "aes-256-gcm" }
+    }
+  ],
+  "environmentId": "uuid"
+}
+```
+
+Response:
+
+```json
+{
+  "success": true,
+  "data": { "created": 3, "updated": 1, "errors": [] }
+}
+```
+
+## Environments
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/vaults/:vaultId/environments` | List environments |
+| `POST` | `/vaults/:vaultId/environments` | Create environment |
+| `PUT` | `/vaults/:vaultId/environments/:envId` | Update environment |
+| `DELETE` | `/vaults/:vaultId/environments/:envId` | Delete environment |
+| `POST` | `/vaults/:vaultId/environments/:envId/clone` | Clone from another env |
+
+### Create Environment
+
+```json
+POST /vaults/:vaultId/environments
+{
+  "name": "staging",
+  "description": "Staging environment"
+}
+```
+
+### Clone Environment
+
+```json
+POST /vaults/:vaultId/environments/:envId/clone
+{
+  "fromEnvironmentId": "source-env-uuid"
+}
+```
+
+## Sharing (Members)
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/vaults/:vaultId/members` | List vault members |
+| `POST` | `/vaults/:vaultId/members` | Add member (with encrypted vault key) |
+| `PUT` | `/vaults/:vaultId/members/:userId` | Update member role |
+| `DELETE` | `/vaults/:vaultId/members/:userId` | Remove member |
+
+## Webhooks
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/vaults/:vaultId/webhooks` | List webhooks |
+| `POST` | `/vaults/:vaultId/webhooks` | Create webhook |
+| `PUT` | `/vaults/:vaultId/webhooks/:id` | Update webhook |
+| `DELETE` | `/vaults/:vaultId/webhooks/:id` | Delete webhook |
+| `POST` | `/vaults/:vaultId/webhooks/:id/test` | Send test event |
+
+## Rotation
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/vaults/:vaultId/secrets/:name/rotation` | Get rotation config |
+| `PUT` | `/vaults/:vaultId/secrets/:name/rotation` | Set rotation config |
+| `DELETE` | `/vaults/:vaultId/secrets/:name/rotation` | Remove rotation |
+| `POST` | `/vaults/:vaultId/secrets/:name/rotate` | Trigger manual rotation |
+
+## Audit
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/audit` | Get audit logs (filtered by plan retention) |
+
+## Billing
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/billing/subscription` | Get current subscription |
+| `POST` | `/billing/checkout` | Create Stripe checkout session |
+| `POST` | `/billing/portal` | Create Stripe portal session |
+
+## Admin
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/admin/stats` | Platform statistics |
+| `GET` | `/admin/users` | List users |
+| `GET` | `/admin/waitlist` | List waitlist entries |
+
+## Public
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/health` | Health check (DB probe) |
+| `POST` | `/waitlist` | Join waitlist |
+| `POST` | `/webhook/stripe` | Stripe webhook (HMAC verified) |
+
+## Rate Limits
+
+| Endpoint Group | Limit |
+|---------------|-------|
+| Auth (login/register/recover) | 5 req/min |
+| Token refresh | 20 req/min |
+| API (all protected routes) | 60 req/min |
+| Waitlist | 10 req/min |
+
+## Error Format
+
+All errors follow this format:
+
+```json
+{
+  "success": false,
+  "error": {
+    "code": "ERROR_CODE",
+    "message": "Human-readable message"
+  }
+}
+```
+
+Common error codes:
+- `UNAUTHORIZED` (401)
+- `FORBIDDEN` (403)
+- `NOT_FOUND` (404)
+- `CONFLICT` (409)
+- `VALIDATION_ERROR` (400)
+- `PLAN_LIMIT` (403)
+- `INTERNAL` (500)

@@ -1,0 +1,109 @@
+---
+title: SDK — Environments
+description: Manage environments with the SDK.
+---
+
+## List Environments
+
+```typescript
+const envs = await pb.environments.list({
+  vault: 'my-app', // optional
+});
+```
+
+Returns an array of `EnvironmentData`:
+
+```typescript
+interface EnvironmentData {
+  id: string;
+  vault_id: string;
+  name: string;
+  description: string | null;
+  is_default: boolean;
+  created_at: string;
+}
+```
+
+## Create an Environment
+
+```typescript
+const env = await pb.environments.create('staging', {
+  vault: 'my-app',
+  description: 'Staging environment',
+});
+```
+
+### Options
+
+```typescript
+interface CreateEnvironmentOptions {
+  vault?: string;
+  description?: string;
+}
+```
+
+## Delete an Environment
+
+```typescript
+await pb.environments.delete('staging', {
+  vault: 'my-app',
+});
+```
+
+:::caution
+Deleting an environment also deletes all secrets in that environment.
+:::
+
+## Clone an Environment
+
+```typescript
+const result = await pb.environments.clone('production', 'staging', {
+  vault: 'my-app',
+});
+console.log(`Cloned ${result.created} secrets`);
+```
+
+### Options
+
+```typescript
+interface CloneEnvironmentOptions {
+  vault?: string;
+}
+```
+
+Copies all secrets from the source environment to the target. The target environment must already exist.
+
+## Resolve Environment Name
+
+```typescript
+const envId = await pb.environments.resolve('production', {
+  vault: 'my-app',
+});
+// Returns: "550e8400-e29b-..."
+```
+
+Resolves an environment name to its UUID. Used internally by the secrets resource.
+
+## Example: Multi-Environment Setup
+
+```typescript
+import { PassBox } from '@pabox/sdk';
+
+const pb = await PassBox.login({ email, password });
+pb.setDefaultVault('my-app');
+
+// Create environments
+await pb.environments.create('staging', { description: 'Pre-production' });
+await pb.environments.create('production', { description: 'Live' });
+
+// Set environment-specific secrets
+await pb.secrets.set('DATABASE_URL', 'postgres://dev/db', { env: 'development' });
+await pb.secrets.set('DATABASE_URL', 'postgres://staging/db', { env: 'staging' });
+await pb.secrets.set('DATABASE_URL', 'postgres://prod/db', { env: 'production' });
+
+// Clone staging to production (for initial setup)
+await pb.environments.clone('production', 'staging');
+
+// Read from specific environment
+const prodDb = await pb.secrets.get('DATABASE_URL', { env: 'production' });
+```

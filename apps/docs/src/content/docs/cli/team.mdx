@@ -1,0 +1,141 @@
+---
+title: Team Management
+description: Manage vault members and service tokens.
+---
+
+## Members
+
+### List Members
+
+```bash
+passbox member list [options]
+```
+
+Lists all members of a vault with their roles.
+
+| Option | Description |
+|--------|-------------|
+| `--vault <name>` | Vault name or ID |
+
+### Add a Member
+
+```bash
+passbox member add <email> [options]
+```
+
+Invites a user to the vault. This performs a cryptographic key exchange (X25519) to securely share the vault's encryption key with the new member.
+
+| Option | Description |
+|--------|-------------|
+| `--vault <name>` | Vault name or ID |
+| `--role <role>` | Role: `viewer`, `member`, `admin` (default: `member`) |
+
+```bash
+passbox member add alice@example.com --vault my-app --role admin
+```
+
+:::note
+The invited user must already have a PassBox account. The CLI uses X25519 Diffie-Hellman key exchange to share the vault key — the server never sees the vault key in plaintext.
+:::
+
+### Change Member Role
+
+```bash
+passbox member role <email> <role> [options]
+```
+
+Updates a member's role. Requires `admin` or `owner` role. Owners cannot be demoted.
+
+| Option | Description |
+|--------|-------------|
+| `--vault <name>` | Vault name or ID |
+
+```bash
+passbox member role alice@example.com admin --vault my-app
+```
+
+### Remove a Member
+
+```bash
+passbox member remove <email> [options]
+```
+
+Removes a member from the vault. Requires `admin` or `owner` role.
+
+| Option | Description |
+|--------|-------------|
+| `--vault <name>` | Vault name or ID |
+
+```bash
+passbox member remove alice@example.com --vault my-app
+```
+
+## Service Tokens
+
+Service tokens provide machine-to-machine authentication for CI/CD, scripts, and MCP servers.
+
+### List Tokens
+
+```bash
+passbox token list
+```
+
+Shows all service tokens for your account.
+
+### Create a Token
+
+```bash
+passbox token create --name <name> [options]
+```
+
+Creates a new service token. The token value is shown once — save it securely.
+
+| Option | Description |
+|--------|-------------|
+| `--name <name>` | Token name (required) |
+| `--permissions <perms>` | Comma-separated: `read`, `write`, `delete` (default: `read`) |
+| `--vault <name>` | Scope token to a specific vault |
+
+```bash
+passbox token create --name "github-actions" --permissions read
+# ✓ Token created: pb_abc123...
+# Save this token — it won't be shown again.
+```
+
+### Revoke a Token
+
+```bash
+passbox token revoke <token-id>
+```
+
+Permanently revokes a service token.
+
+```bash
+passbox token revoke abc123-def456
+```
+
+### Using Service Tokens
+
+Set the token as an environment variable:
+
+```bash
+export PASSBOX_TOKEN=pb_abc123...
+passbox list  # uses token auth instead of session
+```
+
+Or use it in CI/CD:
+
+```yaml
+# GitHub Actions
+env:
+  PASSBOX_TOKEN: ${{ secrets.PASSBOX_TOKEN }}
+```
+
+## Roles Reference
+
+| Role | Read Secrets | Write Secrets | Delete Secrets | Manage Members | Delete Vault |
+|------|-------------|--------------|---------------|---------------|-------------|
+| `viewer` | Yes | No | No | No | No |
+| `member` | Yes | Yes | No | No | No |
+| `admin` | Yes | Yes | Yes | Yes | No |
+| `owner` | Yes | Yes | Yes | Yes | Yes |

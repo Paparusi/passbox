@@ -1,0 +1,194 @@
+---
+title: SDK — Advanced
+description: Members, webhooks, rotation, tokens, importers, and more.
+---
+
+## Members
+
+Manage vault team members.
+
+```typescript
+// List members
+const members = await pb.members.list({ vault: 'my-app' });
+
+// Add a member
+await pb.members.add('alice@example.com', {
+  vault: 'my-app',
+  role: 'admin', // viewer | member | admin
+});
+
+// Update role
+await pb.members.updateRole('alice@example.com', 'member', {
+  vault: 'my-app',
+});
+
+// Remove member
+await pb.members.remove('alice@example.com', {
+  vault: 'my-app',
+});
+
+// Get a user's public key (for key exchange)
+const pubKey = await pb.members.getUserPublicKey('alice@example.com');
+```
+
+### Types
+
+```typescript
+interface MemberData {
+  user_id: string;
+  email: string;
+  role: string;
+  joined_at: string;
+}
+
+interface AddMemberOptions {
+  vault?: string;
+  role?: 'viewer' | 'member' | 'admin';
+}
+```
+
+## Webhooks
+
+Configure HTTP notifications for secret events.
+
+```typescript
+// List webhooks
+const hooks = await pb.webhooks.list({ vault: 'my-app' });
+
+// Create webhook
+const hook = await pb.webhooks.create({
+  vault: 'my-app',
+  name: 'slack-notify',
+  url: 'https://hooks.slack.com/...',
+  events: ['secret.created', 'secret.updated'],
+});
+
+// Update webhook
+await pb.webhooks.update(hook.id, {
+  vault: 'my-app',
+  events: ['secret.created', 'secret.updated', 'secret.deleted'],
+  active: true,
+});
+
+// Test webhook
+await pb.webhooks.test(hook.id, { vault: 'my-app' });
+
+// Delete webhook
+await pb.webhooks.delete(hook.id, { vault: 'my-app' });
+```
+
+### Webhook Events
+
+| Event | Trigger |
+|-------|---------|
+| `secret.created` | New secret created |
+| `secret.updated` | Secret value updated |
+| `secret.deleted` | Secret deleted |
+| `secret.rotated` | Secret rotation triggered |
+
+### Webhook Payload
+
+```json
+{
+  "event": "secret.updated",
+  "vault_id": "...",
+  "data": { "secretName": "API_KEY" },
+  "timestamp": "2024-01-15T10:30:00Z"
+}
+```
+
+Webhooks include an `X-PassBox-Signature` header (HMAC-SHA256) for verification.
+
+## Rotation
+
+Configure secret rotation tracking.
+
+```typescript
+// Get rotation config
+const config = await pb.rotation.get('API_KEY', { vault: 'my-app' });
+
+// Set rotation config
+await pb.rotation.set('API_KEY', {
+  vault: 'my-app',
+  intervalHours: 168, // weekly
+  webhookId: 'webhook-uuid', // optional: notify on rotation
+});
+
+// Remove rotation config
+await pb.rotation.remove('API_KEY', { vault: 'my-app' });
+
+// Trigger manual rotation
+await pb.rotation.trigger('API_KEY', { vault: 'my-app' });
+```
+
+## Service Tokens
+
+Manage service tokens programmatically.
+
+```typescript
+// List tokens
+const tokens = await pb.tokens.list();
+
+// Create token
+const result = await pb.tokens.create({
+  name: 'ci-deploy',
+  permissions: ['read'],
+  vaultId: 'vault-uuid', // optional
+});
+console.log(result.token); // pb_... — save this
+
+// Revoke token
+await pb.tokens.revoke('token-id');
+```
+
+## Account
+
+```typescript
+// Change password
+await pb.account.changePassword({
+  currentPassword: 'old-pass',
+  newPassword: 'new-pass',
+});
+
+// Delete account
+await pb.account.deleteAccount();
+```
+
+## Importers
+
+Import secrets from various file formats.
+
+```typescript
+// Import from .env content
+const result = await pb.importers.fromDotenv(envFileContent, {
+  vault: 'my-app',
+  env: 'production',
+});
+console.log(`${result.created} created, ${result.updated} updated`);
+
+// Import from JSON
+await pb.importers.fromJSON('{"API_KEY": "sk-123"}', {
+  vault: 'my-app',
+});
+
+// Import from CSV
+await pb.importers.fromCSV('name,value\nAPI_KEY,sk-123', {
+  vault: 'my-app',
+});
+```
+
+## Env Resource
+
+Parse and import `.env` file content.
+
+```typescript
+// Parse .env content into key-value object
+const parsed = pb.env.parse('DATABASE_URL=postgres://...\nAPI_KEY=sk-123');
+// { DATABASE_URL: "postgres://...", API_KEY: "sk-123" }
+
+// Import .env content into vault
+const result = await pb.env.import(envContent, {
+  vault: 'my-app',
+  env: 'production',
+});
+```

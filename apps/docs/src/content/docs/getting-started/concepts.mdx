@@ -1,0 +1,95 @@
+---
+title: Core Concepts
+description: Understand the key concepts behind PassBox.
+---
+
+## Vaults
+
+A **vault** is a container for secrets. Each vault has its own AES-256-GCM encryption key, which is itself encrypted with your master key.
+
+- You can create multiple vaults (e.g., one per project or team)
+- Each vault has **members** with roles: `owner`, `admin`, `member`, `viewer`
+- Vault keys are shared between members using X25519 key exchange
+
+```bash
+passbox vault create my-project
+passbox vault list
+```
+
+## Secrets
+
+A **secret** is a key-value pair stored in a vault. The value is encrypted client-side before transmission.
+
+- Secret names are case-sensitive (e.g., `DATABASE_URL`, `api_key`)
+- Every update creates a new **version** (full version history is preserved)
+- Secrets can have optional **descriptions** and **tags**
+
+```bash
+passbox set API_KEY "sk-abc123" --vault my-project
+passbox get API_KEY --vault my-project
+```
+
+## Environments
+
+**Environments** let you store different values for the same secret name across deployment stages.
+
+- Every vault starts with a default `development` environment
+- Common environments: `development`, `staging`, `production`
+- The same secret name can have different values per environment
+
+```bash
+passbox environment create production --vault my-project
+passbox set DATABASE_URL "postgres://prod/db" --env production
+passbox set DATABASE_URL "postgres://dev/db" --env development
+```
+
+## Organizations
+
+Every user has an **organization** (created automatically on registration). Vaults belong to organizations, and team members are invited at the vault level.
+
+## Service Tokens
+
+**Service tokens** (`pb_...`) provide machine-to-machine authentication for:
+
+- CI/CD pipelines (GitHub Actions, etc.)
+- MCP servers (AI agent access)
+- Automated scripts
+
+Service tokens carry an encrypted copy of the master key, allowing them to decrypt secrets without a password.
+
+```bash
+passbox token create --name "ci-deploy"
+```
+
+## Zero-Knowledge Architecture
+
+PassBox uses a **zero-knowledge** design:
+
+1. Your **password** is never sent to the server in raw form for key derivation
+2. The **master key** is derived client-side using Argon2id
+3. All **secret values** are encrypted with AES-256-GCM before leaving your device
+4. **Vault keys** are shared via X25519 Diffie-Hellman key exchange
+5. The **server** only stores ciphertext — it cannot decrypt your secrets
+
+Even if the server database is fully compromised, attackers get only encrypted blobs that are computationally infeasible to decrypt without the master key.
+
+## Recovery Key
+
+During registration, PassBox generates a **recovery key** — a one-time backup that can restore your master key if you forget your password.
+
+- Store it securely (password manager, safe deposit box)
+- It is shown only once during registration
+- Without it, a forgotten password means permanent data loss (by design)
+
+## Plan Limits
+
+PassBox uses an open-core model with tiered plans:
+
+| Feature | Free | Pro | Team | Enterprise |
+|---------|------|-----|------|------------|
+| Vaults | 3 | Unlimited | Unlimited | Unlimited |
+| Secrets per vault | 50 | Unlimited | Unlimited | Unlimited |
+| Members per vault | 2 | Unlimited | Unlimited | Unlimited |
+| Environments per vault | 3 | Unlimited | Unlimited | Unlimited |
+| Audit retention | 7 days | 90 days | 365 days | Unlimited |
+| Service tokens | 1 | 50 | Unlimited | Unlimited |
