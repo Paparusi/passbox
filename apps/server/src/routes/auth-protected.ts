@@ -227,6 +227,20 @@ authProtected.delete('/account', async (c) => {
   return c.json({ success: true, data: { message: 'Account deleted successfully' } });
 });
 
+// ─── Service Tokens (List) ──────────────────────────
+authProtected.get('/service-tokens', async (c) => {
+  const userId = c.get('userId');
+  const supabase = getSupabaseAdmin();
+
+  const { data: tokens } = await supabase
+    .from('service_tokens')
+    .select('id, name, token_prefix, vault_ids, permissions, expires_at, created_at, last_used_at')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false });
+
+  return c.json({ success: true, data: tokens || [] });
+});
+
 // ─── Service Token (Create) ────────────────────────
 const createTokenSchema = z.object({
   name: z.string().min(1).max(100),

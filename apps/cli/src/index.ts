@@ -14,6 +14,12 @@ import { runCommand } from './commands/run.js';
 import { whoamiCommand } from './commands/whoami.js';
 import { configCommand } from './commands/config.js';
 import { serveCommand } from './commands/serve.js';
+import { memberCommand } from './commands/member.js';
+import { webhookCommand } from './commands/webhook.js';
+import { rotationCommand } from './commands/rotation.js';
+import { tokenCommand } from './commands/token.js';
+import { historyCommand } from './commands/history.js';
+import { accountCommand } from './commands/account.js';
 
 const program = new Command();
 
@@ -38,5 +44,11 @@ program.addCommand(runCommand);
 program.addCommand(whoamiCommand);
 program.addCommand(configCommand);
 program.addCommand(serveCommand);
+program.addCommand(memberCommand);
+program.addCommand(webhookCommand);
+program.addCommand(rotationCommand);
+program.addCommand(tokenCommand);
+program.addCommand(historyCommand);
+program.addCommand(accountCommand);
 
 program.parse();

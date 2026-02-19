@@ -22,6 +22,15 @@ export interface GetSecretOptions {
   env?: string;
 }
 
+export interface SecretVersionData {
+  id: string;
+  secret_id: string;
+  version: number;
+  encrypted_value: string;
+  created_by: string;
+  created_at: string;
+}
+
 export interface SetSecretOptions {
   vault?: string;
   env?: string;
@@ -122,6 +131,17 @@ export class SecretsResource {
       result[secret.name] = decryptSecret(blob, vaultKey);
     }
     return result;
+  }
+
+  /**
+   * Get version history for a secret (encrypted values).
+   */
+  async versions(name: string, options?: GetSecretOptions): Promise<SecretVersionData[]> {
+    const vaultId = await this.resolveVaultId(options?.vault);
+    const envQuery = options?.env ? await this.buildEnvQuery(options.env, options.vault) : '';
+    return this.client.get<SecretVersionData[]>(
+      `/vaults/${vaultId}/secrets/${encodeURIComponent(name)}/versions${envQuery}`,
+    );
   }
 
   private async getEnvId(envName: string, vault?: string): Promise<string> {

@@ -18,6 +18,11 @@ import { SecretsResource } from './resources/secrets.js';
 import { EnvironmentsResource } from './resources/environments.js';
 import { EnvResource } from './resources/env.js';
 import { ImportersResource } from './resources/importers.js';
+import { MembersResource } from './resources/members.js';
+import { WebhooksResource } from './resources/webhooks.js';
+import { RotationResource } from './resources/rotation.js';
+import { TokensResource } from './resources/tokens.js';
+import { AccountResource } from './resources/account.js';
 
 export interface PassBoxConfig {
   /** Server URL (default: https://api.passbox.dev) */
@@ -49,6 +54,11 @@ export class PassBox {
   public environments: EnvironmentsResource;
   public env: EnvResource;
   public importers: ImportersResource;
+  public members: MembersResource;
+  public webhooks: WebhooksResource;
+  public rotation: RotationResource;
+  public tokens: TokensResource;
+  public account: AccountResource;
 
   constructor(config: PassBoxConfig) {
     this.client = new HttpClient({
@@ -70,6 +80,11 @@ export class PassBox {
     );
     this.env = new EnvResource(this.secrets);
     this.importers = new ImportersResource(this.secrets, this.env);
+    this.members = new MembersResource(this.client, (nameOrId) => this.resolveVaultId(nameOrId));
+    this.webhooks = new WebhooksResource(this.client, (nameOrId) => this.resolveVaultId(nameOrId));
+    this.rotation = new RotationResource(this.client, (nameOrId) => this.resolveVaultId(nameOrId));
+    this.tokens = new TokensResource(this.client);
+    this.account = new AccountResource(this.client);
   }
 
   /**
@@ -223,3 +238,9 @@ export type { SecretData, GetSecretOptions, SetSecretOptions } from './resources
 export type { EnvironmentData, CreateEnvironmentOptions, CloneEnvironmentOptions } from './resources/environments.js';
 export type { EnvImportOptions } from './resources/env.js';
 export type { ImportResult, ImportOptions } from './resources/importers.js';
+export type { MemberData, AddMemberOptions } from './resources/members.js';
+export type { WebhookData, CreateWebhookOptions, UpdateWebhookOptions } from './resources/webhooks.js';
+export type { RotationConfigData, SetRotationOptions } from './resources/rotation.js';
+export type { ServiceTokenData, CreateTokenOptions, CreateTokenResult } from './resources/tokens.js';
+export type { ChangePasswordOptions } from './resources/account.js';
+export type { SecretVersionData } from './resources/secrets.js';
