@@ -196,7 +196,7 @@ export default function RegisterPage() {
         <button
           type="button"
           onClick={() => {
-            const redirectTo = `${window.location.origin}/auth/callback`;
+            const redirectTo = `${window.location.origin}/callback`;
             window.location.href = `${SUPABASE_URL}/auth/v1/authorize?provider=github&redirect_to=${encodeURIComponent(redirectTo)}`;
           }}
           disabled={loading}
