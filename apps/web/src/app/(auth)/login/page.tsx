@@ -38,7 +38,7 @@ export default function LoginPage() {
         masterKey = deriveMasterKey(password, salt, data.keys.keyDerivationParams);
       }
 
-      login(data.session.accessToken, data.user, masterKey);
+      login(data.session.accessToken, data.user, masterKey, data.session.refreshToken);
       router.push('/vaults');
     } catch (err: any) {
       setError(err.message || 'Login failed');

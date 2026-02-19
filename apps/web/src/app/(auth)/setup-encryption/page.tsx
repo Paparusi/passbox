@@ -110,11 +110,13 @@ export default function SetupEncryptionPage() {
       });
 
       // 6. Store session
-      login(oauthToken, oauthUser, masterKey);
+      const oauthRefreshToken = sessionStorage.getItem('passbox_oauth_refresh_token') || undefined;
+      login(oauthToken, oauthUser, masterKey, oauthRefreshToken);
 
       // Clean up temp storage
       sessionStorage.removeItem('passbox_oauth_token');
       sessionStorage.removeItem('passbox_oauth_user');
+      sessionStorage.removeItem('passbox_oauth_refresh_token');
 
       // Show recovery key
       setRecoveryKey(recKey);

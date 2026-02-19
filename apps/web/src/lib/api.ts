@@ -218,6 +218,27 @@ class ApiClient {
     return data.data as { orgId: string };
   }
 
+  // Change password (protected)
+  async changePassword(params: {
+    newPassword: string;
+    encryptedPrivateKey: string;
+    encryptedMasterKeyRecovery: string;
+    keyDerivationSalt: string;
+    keyDerivationParams: { iterations: number; memory: number; parallelism: number };
+  }) {
+    return this.request<{ message: string }>('/auth/change-password', {
+      method: 'POST',
+      body: JSON.stringify(params),
+    });
+  }
+
+  // Delete account (protected)
+  async deleteAccount() {
+    return this.request<{ message: string }>('/auth/account', {
+      method: 'DELETE',
+    });
+  }
+
   // Recovery (public, no auth needed)
   async getRecoveryInfo(email: string) {
     const res = await fetch(`${this.baseUrl}/auth/recovery-info`, {

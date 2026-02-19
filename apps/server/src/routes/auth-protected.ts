@@ -111,6 +111,115 @@ authProtected.post('/setup-keys', async (c) => {
   }, 201);
 });
 
+// ─── Change Password ─────────────────────────────────
+const changePasswordSchema = z.object({
+  newPassword: z.string().min(8).max(128),
+  encryptedPrivateKey: z.string().max(10_000),
+  encryptedMasterKeyRecovery: z.string().max(10_000),
+  keyDerivationSalt: z.string().max(1_000),
+  keyDerivationParams: z.object({
+    iterations: z.number().int().min(1).max(100),
+    memory: z.number().int().min(1024).max(1_048_576),
+    parallelism: z.number().int().min(1).max(16),
+  }),
+});
+
+authProtected.post('/change-password', async (c) => {
+  const userId = c.get('userId');
+  const body = await c.req.json();
+  const data = changePasswordSchema.parse(body);
+  const supabase = getSupabaseAdmin();
+
+  // Update Supabase auth password (works for email users; harmless for OAuth users)
+  await supabase.auth.admin.updateUserById(userId, {
+    password: data.newPassword,
+  });
+
+  // Update encryption keys
+  const { error: keysError } = await supabase
+    .from('user_keys')
+    .update({
+      encrypted_private_key: data.encryptedPrivateKey,
+      encrypted_master_key_recovery: data.encryptedMasterKeyRecovery,
+      key_derivation_salt: data.keyDerivationSalt,
+      key_derivation_params: data.keyDerivationParams,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('user_id', userId);
+
+  if (keysError) {
+    throw Errors.internal('Failed to update encryption keys');
+  }
+
+  return c.json({ success: true, data: { message: 'Password changed successfully' } });
+});
+
+// ─── Delete Account ──────────────────────────────────
+authProtected.delete('/account', async (c) => {
+  const userId = c.get('userId');
+  const supabase = getSupabaseAdmin();
+
+  // Delete in order: secrets → vault_members → vaults → service_tokens → audit_logs → user_keys → org_members → subscriptions
+  // Get user's owned vaults
+  const { data: memberships } = await supabase
+    .from('vault_members')
+    .select('vault_id')
+    .eq('user_id', userId);
+
+  const vaultIds = memberships?.map(m => m.vault_id) || [];
+
+  if (vaultIds.length > 0) {
+    // Delete secret versions and secrets in those vaults
+    await supabase.from('secret_versions').delete().in('secret_id',
+      supabase.from('secrets').select('id').in('vault_id', vaultIds) as any
+    );
+    await supabase.from('secrets').delete().in('vault_id', vaultIds);
+    await supabase.from('vault_members').delete().in('vault_id', vaultIds);
+    await supabase.from('vaults').delete().in('id', vaultIds);
+  }
+
+  // Delete remaining vault memberships (shared vaults)
+  await supabase.from('vault_members').delete().eq('user_id', userId);
+
+  // Delete service tokens
+  await supabase.from('service_tokens').delete().eq('user_id', userId);
+
+  // Delete audit logs
+  await supabase.from('audit_logs').delete().eq('user_id', userId);
+
+  // Delete user keys
+  await supabase.from('user_keys').delete().eq('user_id', userId);
+
+  // Delete org memberships and empty orgs
+  const { data: userOrgs } = await supabase
+    .from('org_members')
+    .select('org_id')
+    .eq('user_id', userId);
+
+  await supabase.from('org_members').delete().eq('user_id', userId);
+
+  // Clean up empty orgs
+  if (userOrgs) {
+    for (const { org_id } of userOrgs) {
+      const { count } = await supabase
+        .from('org_members')
+        .select('*', { count: 'exact', head: true })
+        .eq('org_id', org_id);
+      if (count === 0) {
+        await supabase.from('organizations').delete().eq('id', org_id);
+      }
+    }
+  }
+
+  // Delete subscription
+  await supabase.from('subscriptions').delete().eq('user_id', userId);
+
+  // Delete Supabase auth user
+  await supabase.auth.admin.deleteUser(userId);
+
+  return c.json({ success: true, data: { message: 'Account deleted successfully' } });
+});
+
 // ─── Service Token (Create) ────────────────────────
 const createTokenSchema = z.object({
   name: z.string().min(1).max(100),

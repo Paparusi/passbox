@@ -33,6 +33,7 @@ export default function OAuthCallbackPage() {
   } | null>(null);
   const [tokenData, setTokenData] = useState<{
     accessToken: string;
+    refreshToken: string | null;
     user: { id: string; email: string };
   } | null>(null);
 
@@ -49,6 +50,7 @@ export default function OAuthCallbackPage() {
       const hash = window.location.hash.substring(1);
       const params = new URLSearchParams(hash);
       const accessToken = params.get('access_token');
+      const refreshToken = params.get('refresh_token');
 
       if (!accessToken) {
         setError('No access token found. Please try signing in again.');
@@ -59,7 +61,7 @@ export default function OAuthCallbackPage() {
       // Decode JWT to get user info
       const payload = parseJwtPayload(accessToken);
       const user = { id: payload.sub, email: payload.email };
-      setTokenData({ accessToken, user });
+      setTokenData({ accessToken, refreshToken, user });
 
       // Check if user has encryption keys
       const userKeys = await api.getKeys(accessToken);
@@ -68,6 +70,9 @@ export default function OAuthCallbackPage() {
         // New OAuth user — needs to set up encryption
         sessionStorage.setItem('passbox_oauth_token', accessToken);
         sessionStorage.setItem('passbox_oauth_user', JSON.stringify(user));
+        if (refreshToken) {
+          sessionStorage.setItem('passbox_oauth_refresh_token', refreshToken);
+        }
         router.push('/setup-encryption');
         return;
       }
@@ -106,7 +111,7 @@ export default function OAuthCallbackPage() {
         return;
       }
 
-      login(tokenData.accessToken, tokenData.user, masterKey);
+      login(tokenData.accessToken, tokenData.user, masterKey, tokenData.refreshToken || undefined);
       router.push('/vaults');
     } catch (err: any) {
       setError('Failed to unlock. Please try again.');

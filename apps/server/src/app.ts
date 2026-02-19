@@ -29,11 +29,9 @@ const allowedOrigins = [
 
 app.use('*', cors({
   origin: (origin) => {
-    // Allow if origin matches or is a Vercel preview deploy
     if (!origin) return allowedOrigins[0];
     if (allowedOrigins.includes(origin)) return origin;
-    if (origin.endsWith('.vercel.app')) return origin;
-    return allowedOrigins[0];
+    return null;
   },
   credentials: true,
   allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],

@@ -94,7 +94,7 @@ export default function RegisterPage() {
       });
 
       if (data.session) {
-        login(data.session.accessToken, data.user, masterKey);
+        login(data.session.accessToken, data.user, masterKey, data.session.refreshToken);
         // Show recovery key before navigating
         setRecoveryKey(recKey);
       }

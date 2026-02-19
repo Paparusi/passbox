@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
+import { API_URL } from './utils';
 
 interface User {
   id: string;
@@ -14,7 +15,7 @@ interface AuthContext {
   token: string | null;
   loading: boolean;
   masterKey: Uint8Array | null;
-  login: (token: string, user: User, masterKey?: Uint8Array) => void;
+  login: (token: string, user: User, masterKey?: Uint8Array, refreshToken?: string) => void;
   logout: () => void;
 }
 
@@ -28,6 +29,7 @@ const AuthContext = createContext<AuthContext>({
 });
 
 const IDLE_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes
+const REFRESH_INTERVAL_MS = 50 * 60 * 1000; // 50 minutes (refresh before 1h expiry)
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
@@ -36,6 +38,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const masterKeyRef = useRef<Uint8Array | null>(null);
   const [masterKeyVersion, setMasterKeyVersion] = useState(0);
   const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const refreshTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const router = useRouter();
 
   // Wipe master key from memory (zero-fill then null)
@@ -56,6 +59,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }, IDLE_TIMEOUT_MS);
   }, [wipeMasterKey]);
 
+  // Refresh the access token using the refresh token
+  const refreshAccessToken = useCallback(async () => {
+    const refreshToken = sessionStorage.getItem('passbox_refresh_token');
+    if (!refreshToken) return;
+
+    try {
+      const res = await fetch(`${API_URL}/api/v1/auth/refresh`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refreshToken }),
+      });
+      const data = await res.json();
+      if (data.success && data.data) {
+        sessionStorage.setItem('passbox_token', data.data.accessToken);
+        sessionStorage.setItem('passbox_refresh_token', data.data.refreshToken);
+        setToken(data.data.accessToken);
+      }
+    } catch {
+      // Silent fail — next request will 401 and redirect to login
+    }
+  }, []);
+
   // Load saved session
   useEffect(() => {
     const savedToken = sessionStorage.getItem('passbox_token');
@@ -66,6 +91,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     setLoading(false);
   }, []);
+
+  // Auto-refresh token on an interval
+  useEffect(() => {
+    if (!token) {
+      if (refreshTimerRef.current) clearInterval(refreshTimerRef.current);
+      return;
+    }
+
+    // Refresh immediately if token might be stale (page was reloaded)
+    const savedRefresh = sessionStorage.getItem('passbox_refresh_token');
+    if (savedRefresh) {
+      refreshAccessToken();
+    }
+
+    refreshTimerRef.current = setInterval(refreshAccessToken, REFRESH_INTERVAL_MS);
+    return () => {
+      if (refreshTimerRef.current) clearInterval(refreshTimerRef.current);
+    };
+  }, [token, refreshAccessToken]);
 
   // beforeunload: wipe master key when tab closes
   useEffect(() => {
@@ -92,9 +136,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, [masterKeyVersion, resetIdleTimer]);
 
-  const login = (newToken: string, newUser: User, newMasterKey?: Uint8Array) => {
+  const login = (newToken: string, newUser: User, newMasterKey?: Uint8Array, refreshToken?: string) => {
     sessionStorage.setItem('passbox_token', newToken);
     sessionStorage.setItem('passbox_user', JSON.stringify(newUser));
+    if (refreshToken) {
+      sessionStorage.setItem('passbox_refresh_token', refreshToken);
+    }
     setToken(newToken);
     setUser(newUser);
     if (newMasterKey) {
@@ -106,8 +153,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = () => {
     sessionStorage.removeItem('passbox_token');
     sessionStorage.removeItem('passbox_user');
+    sessionStorage.removeItem('passbox_refresh_token');
     wipeMasterKey();
     if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
+    if (refreshTimerRef.current) clearInterval(refreshTimerRef.current);
     setToken(null);
     setUser(null);
     setMasterKeyVersion(0);
