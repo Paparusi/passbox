@@ -114,7 +114,13 @@ authPublic.post('/login', async (c) => {
   });
 
   if (error || !signIn.session) {
-    throw Errors.unauthorized();
+    // Check if this is a GitHub-only OAuth account (no password set)
+    const { data: users } = await supabase.auth.admin.listUsers();
+    const existingUser = users?.users?.find(u => u.email === data.email);
+    if (existingUser?.app_metadata?.provider === 'github') {
+      throw Errors.badRequest('This account uses GitHub sign-in. Please use the "Sign in with GitHub" button.');
+    }
+    throw Errors.badRequest('Invalid email or password.');
   }
 
   // Fetch user keys for client-side decryption
